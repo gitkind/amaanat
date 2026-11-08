@@ -132,7 +132,7 @@
         name: r.name,
         description: r.description,
         prefill: r.prefill,
-        theme: { color: '#252525' },
+        theme: { color: '#2b2118' },
         handler: async (resp) => {
           payBtn.textContent = 'Confirming payment…';
           try {
