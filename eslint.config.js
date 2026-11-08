@@ -10,7 +10,7 @@ export default [
     rules: { "no-control-regex": "off" },
   },
   {
-    files: ["public/**/*.js"],
+    files: ["public/*.js", "public/js/**/*.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",
@@ -23,6 +23,10 @@ export default [
         renderProductCard: "readonly", renderSkeletonCards: "readonly", fillStates: "readonly",
       },
     },
+  },
+  {
+    files: ["public/admin/**/*.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "script", globals: { ...globals.browser } },
   },
   {
     files: ["public/app.js"],

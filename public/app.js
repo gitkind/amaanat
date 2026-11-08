@@ -101,18 +101,18 @@ const Cart = {
     this._badges();
     return this.state;
   },
-  async add(productId, quantity = 1) {
-    this.state = await API.post('/api/cart/items', { productId, quantity });
+  async add(productId, quantity = 1, variantId = null) {
+    this.state = await API.post('/api/cart/items', { productId, quantity, variantId });
     this._changed();
     return this.state;
   },
-  async set(productId, quantity) {
-    this.state = await API.put(`/api/cart/items/${encodeURIComponent(productId)}`, { quantity });
+  async set(productId, quantity, variantId = null) {
+    this.state = await API.put(`/api/cart/items/${encodeURIComponent(productId)}`, { quantity, variantId });
     this._changed();
     return this.state;
   },
-  async remove(productId) {
-    this.state = await API.del(`/api/cart/items/${encodeURIComponent(productId)}`);
+  async remove(productId, variantId = null) {
+    this.state = await API.del(`/api/cart/items/${encodeURIComponent(productId)}${variantId ? `?variant=${encodeURIComponent(variantId)}` : ''}`);
     this._changed();
     return this.state;
   },
@@ -142,15 +142,15 @@ function statusClass(code) {
   return { in: 'in-stock', out: 'out-of-stock', unconfirmed: 'unconfirmed', inactive: 'out-of-stock' }[code] || 'unconfirmed';
 }
 
-async function addToBag(product, quantity, button) {
+async function addToBag(product, quantity, button, variant = null) {
   if (button) button.disabled = true;
   try {
-    await Cart.add(product.id, quantity);
-    Toast.success(`${product.name} added to bag`);
+    await Cart.add(product.id, quantity, variant ? variant.id : null);
+    Toast.success(`${product.name}${variant ? ` (${variant.name})` : ''} added to bag`);
   } catch (e) {
     Toast.error(e.message);
   } finally {
-    if (button) button.disabled = !product.availability.canBuy;
+    if (button) button.disabled = !(variant ? variant.availability.canBuy : product.availability.canBuy);
   }
 }
 
@@ -174,7 +174,12 @@ function renderProductCard(product) {
       </div>
     </div>`;
   const btn = card.querySelector('button');
-  if (a.canBuy) btn.addEventListener('click', () => addToBag(product, 1, btn));
+  if (a.canBuy && product.variants && product.variants.length) {
+    btn.textContent = 'Choose option';
+    btn.addEventListener('click', () => { location.href = href; });
+  } else if (a.canBuy) {
+    btn.addEventListener('click', () => addToBag(product, 1, btn));
+  }
   return card;
 }
 

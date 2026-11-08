@@ -3,6 +3,9 @@
 //   npm run dev:local                     # real catalogue, stock stays unconfirmed
 //   npm run dev:local -- --test-fixtures  # ALSO sets placeholder stock (5 each) and ₹0 shipping
 //                                          # in the LOCAL database so checkout can be exercised.
+//   npm run dev:local -- --make-admin you@example.com [--role manager]
+//                                          # grants admin to an account you already registered
+//                                          # on /account.html (LOCAL database only; no default passwords).
 //
 // Fixture values are NOT business data. They never touch Supabase.
 import http from "node:http";
@@ -22,6 +25,19 @@ if (process.argv.includes("--test-fixtures")) {
   }
   await deps.db.pg.query("UPDATE site_settings SET shipping_paise = 0, shipping_confirmed = true WHERE id = 1");
   console.log("  ⚠ Local test fixtures applied: stock=5 per product, shipping=₹0 (local DB only)");
+}
+
+const adminIdx = process.argv.indexOf("--make-admin");
+if (adminIdx > -1) {
+  const email = String(process.argv[adminIdx + 1] || "").toLowerCase();
+  const role = process.argv.includes("--role") ? process.argv[process.argv.indexOf("--role") + 1] : "owner";
+  const { rows } = await deps.db.pg.query("SELECT id FROM auth.users WHERE email = $1", [email]);
+  if (!rows[0]) {
+    console.error(`  ✗ No local account for ${email}. Register it at /account.html first, then rerun.`);
+  } else {
+    await deps.db.pg.query("INSERT INTO admin_users (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET role = $2", [rows[0].id, role]);
+    console.log(`  ✓ ${email} is now a local ${role}. Sign in at /admin/`);
+  }
 }
 
 const app = createApp(deps);

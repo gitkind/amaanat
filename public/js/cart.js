@@ -3,6 +3,7 @@
   const root = document.getElementById('cart');
   const ISSUE = {
     unconfirmed: 'Stock to be confirmed — remove to continue',
+    variant_required: 'Choose an option on the product page — remove to continue',
     out: 'Sold out — remove to continue',
     inactive: 'No longer available — remove to continue',
     insufficient_stock: 'Fewer pieces left than in your bag — lower the quantity',
@@ -16,18 +17,19 @@
     const q = cart.quote;
     root.innerHTML = `
       <div class="cart-items">${cart.items.map((i) => `
-        <div class="cart-item" data-id="${escapeHtml(i.product.id)}">
+        <div class="cart-item" data-id="${escapeHtml(i.product.id)}" data-variant="${escapeHtml(i.variant ? i.variant.id : '')}">
           <a class="cart-item-img" href="/product.html?slug=${encodeURIComponent(i.product.slug)}"><img src="${escapeHtml(assetUrl(i.product.image))}" alt="${escapeHtml(i.product.alt || i.product.name)}" /></a>
           <div class="cart-item-info">
             <h3>${escapeHtml(i.product.name)}</h3>
-            <p class="cart-item-unit-price">${formatINR(i.product.pricePaise)} each</p>
+            ${i.variant ? `<p class="cart-item-variant">${escapeHtml(i.variant.name)}</p>` : ''}
+            <p class="cart-item-unit-price">${formatINR(i.unitPricePaise)} each</p>
             ${i.issue ? `<p class="form-error">${escapeHtml(ISSUE[i.issue] || i.issue)}</p>` : ''}
             <button class="cart-item-remove" type="button" data-remove>Remove</button>
           </div>
           <div class="cart-item-qty quantity-selector">
             <button class="qty-btn" type="button" data-step="-1" aria-label="Decrease ${escapeHtml(i.product.name)}">−</button>
             <span class="qty-value">${i.quantity}</span>
-            <button class="qty-btn" type="button" data-step="1" aria-label="Increase ${escapeHtml(i.product.name)}" ${i.quantity >= (i.product.availability.maxQuantity || 0) ? 'disabled' : ''}>+</button>
+            <button class="qty-btn" type="button" data-step="1" aria-label="Increase ${escapeHtml(i.product.name)}" ${i.quantity >= (i.maxQuantity || 0) ? 'disabled' : ''}>+</button>
           </div>
           <p class="cart-item-total">${formatINR(i.lineTotalPaise)}</p>
         </div>`).join('')}
@@ -50,11 +52,12 @@
     const row = e.target.closest('.cart-item');
     if (!row) return;
     const id = row.dataset.id;
-    const item = Cart.state.items.find((i) => i.product.id === id);
+    const variantId = row.dataset.variant || null;
+    const item = Cart.state.items.find((i) => i.product.id === id && (i.variant ? i.variant.id : null) === variantId);
     try {
-      if (e.target.closest('[data-remove]')) render(await Cart.remove(id));
+      if (e.target.closest('[data-remove]')) render(await Cart.remove(id, variantId));
       const step = e.target.closest('[data-step]');
-      if (step && item) render(await Cart.set(id, Math.max(0, item.quantity + Number(step.dataset.step))));
+      if (step && item) render(await Cart.set(id, Math.max(0, item.quantity + Number(step.dataset.step)), variantId));
     } catch (err) {
       Toast.error(err.message);
     }

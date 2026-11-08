@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Admin — Amaanat</title>
+    <link rel="stylesheet" href="/admin/admin.css" />
+  </head>
+  <body>
+    <a class="skip" href="#view">Skip to content</a>
+    <div class="shell" id="shell" hidden>
+      <aside class="side" id="side">
+        <div class="brand"><span class="brand-hi" lang="hi">अमानत</span><span>Admin</span></div>
+        <nav aria-label="Admin">
+          <a href="#/overview" data-nav="overview">Overview</a>
+          <a href="#/orders" data-nav="orders">Orders</a>
+          <a href="#/products" data-nav="products">Products</a>
+          <a href="#/inventory" data-nav="inventory">Inventory</a>
+          <a href="#/customers" data-nav="customers">Customers</a>
+          <a href="#/settings" data-nav="settings">Settings</a>
+          <a href="#/pages" data-nav="pages">Pages</a>
+          <a href="#/audit" data-nav="audit" data-owner>Audit log</a>
+        </nav>
+        <div class="who">
+          <span id="who"></span>
+          <a href="/" target="_blank" rel="noopener">View store ↗</a>
+          <button type="button" class="link" id="logout">Sign out</button>
+        </div>
+      </aside>
+      <header class="top">
+        <button type="button" class="btn small menu" id="menu" aria-expanded="false" aria-controls="side">Menu</button>
+        <span class="top-title" id="top-title">Admin</span>
+      </header>
+      <main id="view" tabindex="-1" aria-live="polite"></main>
+    </div>
+
+    <main class="login" id="login" hidden>
+      <form id="login-form" class="card" novalidate>
+        <p class="brand-hi" lang="hi">अमानत</p>
+        <h1>Store admin</h1>
+        <div class="field"><label for="l-email">Email</label><input id="l-email" name="email" type="email" autocomplete="username" required /></div>
+        <div class="field"><label for="l-password">Password</label><input id="l-password" name="password" type="password" autocomplete="current-password" required /></div>
+        <p class="error" id="login-error" role="alert"></p>
+        <button class="btn primary" type="submit">Sign in</button>
+        <p class="hint">Admin access is granted by the store owner. There are no shared or demo accounts.</p>
+      </form>
+    </main>
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <script src="/admin/admin.js"></script>
+  </body>
+</html>

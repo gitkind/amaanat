@@ -29,9 +29,12 @@
     <div class="product-detail-info">
       <p class="eyebrow">${escapeHtml(p.category)}</p>
       <h1>${escapeHtml(p.name)}</h1>
-      <p class="product-detail-price">${formatINR(p.pricePaise)}</p>
+      <p class="product-detail-price" id="price">${p.minPricePaise !== p.maxPricePaise ? `From ${formatINR(p.minPricePaise)}` : formatINR(p.minPricePaise ?? p.pricePaise)}</p>
       <p class="product-detail-status ${statusClass(a.code)}">${escapeHtml(a.label)}</p>
       <p class="product-detail-desc">${escapeHtml(p.description)}</p>
+      ${p.variants.length ? `<fieldset class="variant-picker"><legend>Choose an option</legend>${p.variants.map((v) => `
+        <label class="variant-option${v.availability.canBuy ? '' : ' is-unavailable'}"><input type="radio" name="variant" value="${escapeHtml(v.id)}" ${v.availability.canBuy ? '' : 'disabled'} />
+        <span>${escapeHtml(v.name)}</span><small>${formatINR(v.pricePaise)} · ${escapeHtml(v.availability.label)}</small></label>`).join('')}</fieldset>` : ''}
       <div class="quantity-selector" ${a.canBuy ? '' : 'hidden'}>
         <button class="qty-btn" type="button" data-step="-1" aria-label="Decrease quantity">−</button>
         <span class="qty-value" id="qty" aria-live="polite">1</span>
@@ -45,14 +48,27 @@
     </div>`;
 
   let qty = 1;
+  let variant = null;
   const qtyEl = document.getElementById('qty');
-  const max = Math.max(1, a.maxQuantity || 1);
+  const maxQty = () => Math.max(1, (variant ? variant.availability.maxQuantity : a.maxQuantity) || 1);
   root.querySelectorAll('.qty-btn').forEach((b) => b.addEventListener('click', () => {
-    qty = Math.min(max, Math.max(1, qty + Number(b.dataset.step)));
+    qty = Math.min(maxQty(), Math.max(1, qty + Number(b.dataset.step)));
     qtyEl.textContent = String(qty);
   }));
   const addBtn = document.getElementById('add');
-  if (a.canBuy) addBtn.addEventListener('click', () => addToBag(p, qty, addBtn));
+  if (p.variants.length) {
+    addBtn.disabled = true;
+    if (a.canBuy) addBtn.textContent = 'Choose an option';
+    root.querySelectorAll('input[name="variant"]').forEach((r) => r.addEventListener('change', () => {
+      variant = p.variants.find((v) => v.id === r.value);
+      document.getElementById('price').textContent = formatINR(variant.pricePaise);
+      qty = 1;
+      qtyEl.textContent = '1';
+      addBtn.disabled = !variant.availability.canBuy;
+      addBtn.textContent = 'Add to bag';
+    }));
+  }
+  if (a.canBuy) addBtn.addEventListener('click', () => addToBag(p, qty, addBtn, variant));
 
   root.querySelectorAll('.thumb').forEach((b) => b.addEventListener('click', () => {
     document.getElementById('main-img').src = b.dataset.src;

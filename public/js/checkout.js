@@ -25,7 +25,7 @@
       ${cart.items.map((i) => `
         <div class="checkout-item">
           <div class="checkout-item-img"><img src="${escapeHtml(assetUrl(i.product.image))}" alt="" /></div>
-          <div class="checkout-item-name">${escapeHtml(i.product.name)}<br /><small>Qty ${i.quantity}</small></div>
+          <div class="checkout-item-name">${escapeHtml(i.product.name)}${i.variant ? ` — ${escapeHtml(i.variant.name)}` : ''}<br /><small>Qty ${i.quantity}</small></div>
           <div class="checkout-item-price">${formatINR(i.lineTotalPaise)}</div>
         </div>`).join('')}
       <div class="checkout-totals">
