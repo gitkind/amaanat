@@ -4,7 +4,20 @@
   "type": "module",
   "main": "api/index.js",
   "scripts": {
-    "dev": "node api/index.js",
-    "start": "node api/index.js"
+    "dev": "node --env-file-if-exists=.env api/index.js",
+    "start": "node api/index.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test",
+    "dev:local": "node --env-file-if-exists=.env scripts/dev-local.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
   }
 }

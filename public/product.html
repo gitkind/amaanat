@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Product — Amaanat</title>
+    <meta name="description" content="Amaanat jewellery piece." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&family=Noto+Serif+Devanagari:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="product">
+    <div class="grain" aria-hidden="true"></div>
+    <header class="site-header" id="header"></header>
+    <main id="main">
+      <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><a href="/shop.html">Shop</a><span>/</span><span id="crumb-name"></span></nav>
+      <section class="product-detail" id="product-detail" aria-live="polite"></section>
+      <section class="related-section" id="related-section" hidden>
+        <h2>More like this</h2>
+        <div class="related-grid" id="related-grid"></div>
+      </section>
+    </main>
+    <footer class="site-footer"></footer>
+    <script src="/app.js"></script>
+    <script src="/js/product.js"></script>
+  </body>
+</html>
