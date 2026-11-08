@@ -19,8 +19,8 @@ export default [
         // shared helpers defined in public/app.js
         API: "readonly", Toast: "readonly", Cart: "readonly", Session: "readonly", Forms: "readonly",
         escapeHtml: "readonly", formatINR: "readonly", assetUrl: "readonly", randomKey: "readonly",
-        store: "readonly", notice: "readonly", statusClass: "readonly", addToBag: "readonly",
-        renderProductCard: "readonly", renderSkeletonCards: "readonly", fillStates: "readonly",
+        store: "readonly", notice: "readonly", statusClass: "readonly", addToBag: "readonly", productUrl: "readonly",
+        renderProductCard: "readonly", fillStates: "readonly",
       },
     },
   },
@@ -30,6 +30,6 @@ export default [
   },
   {
     files: ["public/app.js"],
-    rules: { "no-unused-vars": ["error", { varsIgnorePattern: "^(API|Toast|Cart|Session|Forms|escapeHtml|formatINR|assetUrl|randomKey|store|notice|statusClass|addToBag|renderProductCard|renderSkeletonCards|fillStates)$" }], "no-redeclare": "off" },
+    rules: { "no-unused-vars": ["error", { varsIgnorePattern: "^(API|Toast|Cart|Session|Forms|escapeHtml|formatINR|assetUrl|productUrl|randomKey|store|notice|statusClass|addToBag|renderProductCard|fillStates)$" }], "no-redeclare": "off" },
   },
 ];

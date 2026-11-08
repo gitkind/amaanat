@@ -22,19 +22,17 @@
   function renderSummary(cart) {
     const q = cart.quote;
     summary.innerHTML = `
-      ${cart.items.map((i) => `
-        <div class="checkout-item">
-          <div class="checkout-item-img"><img src="${escapeHtml(assetUrl(i.product.image))}" alt="" /></div>
-          <div class="checkout-item-name">${escapeHtml(i.product.name)}${i.variant ? ` — ${escapeHtml(i.variant.name)}` : ''}<br /><small>Qty ${i.quantity}</small></div>
-          <div class="checkout-item-price">${formatINR(i.lineTotalPaise)}</div>
-        </div>`).join('')}
-      <div class="checkout-totals">
-        <div class="cart-summary-row"><span>Subtotal</span><span>${formatINR(cart.subtotalPaise)}</span></div>
-        ${q.ok ? `
-          <div class="cart-summary-row"><span>Shipping</span><span>${q.shippingPaise === 0 ? 'Free' : formatINR(q.shippingPaise)}</span></div>
-          ${q.taxPaise ? `<div class="cart-summary-row"><span>Tax</span><span>${formatINR(q.taxPaise)}</span></div>` : ''}
-          <div class="cart-summary-row total"><span>Total</span><span>${formatINR(q.totalPaise)}</span></div>` : ''}
-      </div>
+      <div class="summary-items">${cart.items.map((i) => `
+        <div class="summary-item">
+          <img src="${escapeHtml(assetUrl(i.product.image))}" alt="" width="56" height="70">
+          <div>${escapeHtml(i.product.name)}${i.variant ? ` — ${escapeHtml(i.variant.name)}` : ''}<small>Qty ${i.quantity}</small></div>
+          <div>${formatINR(i.lineTotalPaise)}</div>
+        </div>`).join('')}</div>
+      <div class="summary-row"><span>Subtotal</span><span>${formatINR(cart.subtotalPaise)}</span></div>
+      ${q.ok ? `
+        <div class="summary-row"><span>Shipping</span><span>${q.shippingPaise === 0 ? 'Free' : formatINR(q.shippingPaise)}</span></div>
+        ${q.taxPaise ? `<div class="summary-row"><span>Tax</span><span>${formatINR(q.taxPaise)}</span></div>` : ''}
+        <div class="summary-row summary-row--total"><span>Total</span><span>${formatINR(q.totalPaise)}</span></div>` : ''}
       <p class="fine-print">Prices, stock and totals are checked again on our server when you pay.</p>`;
   }
 
@@ -45,9 +43,9 @@
   ]);
 
   if (!cart.items.length) {
-    summary.innerHTML = '';
+    summary.innerHTML = '<p>No pieces yet.</p>';
     form.hidden = true;
-    noticeEl.innerHTML = '<div class="empty-state"><h2>Your bag is empty</h2><p><a class="btn btn-gold" href="/shop.html">Browse the collection</a></p></div>';
+    noticeEl.innerHTML = '<div class="empty-state"><h2>Your bag is empty</h2><p>Add a piece to check out.</p><a class="btn" href="/shop">Browse the collection</a></div>';
     return;
   }
   renderSummary(cart);
@@ -56,7 +54,7 @@
   if (blockers.length || !cart.quote.ok) {
     const msgs = blockers.map((b) => b.message);
     if (!cart.quote.ok) msgs.unshift(cart.quote.message);
-    noticeEl.innerHTML = `<div class="notice notice--info" role="status"><strong>Payment can't open yet.</strong><ul>${[...new Set(msgs)].map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul></div>`;
+    noticeEl.innerHTML = `<div class="notice" role="status"><strong>Payment can't open yet.</strong><ul>${[...new Set(msgs)].map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul></div>`;
   } else {
     payBtn.disabled = false;
   }
@@ -104,7 +102,7 @@
   function goToOrder(order, key) {
     store.set('sessionStorage', `am_order_${order.id}`, key);
     resetKey();
-    location.href = `/order.html?id=${encodeURIComponent(order.id)}`;
+    location.href = `/order?id=${encodeURIComponent(order.id)}`;
   }
 
   let busy = false;
@@ -134,7 +132,7 @@
         name: r.name,
         description: r.description,
         prefill: r.prefill,
-        theme: { color: '#8c6239' },
+        theme: { color: '#252525' },
         handler: async (resp) => {
           payBtn.textContent = 'Confirming payment…';
           try {

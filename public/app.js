@@ -1,11 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════
    AMAANAT — shared storefront module
-   All prices, stock and totals come from the server. The browser only
-   holds display state; the bag lives server-side (cookie-identified).
+   Pages are rendered on the server. This file adds behaviour:
+   menu, bag count, quick add, newsletter, gentle reveal effects,
+   plus helpers used by the page scripts. All prices, stock and
+   totals come from the server; the bag lives server-side.
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
-const BAG_ICON_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>';
+document.documentElement.classList.add('js');
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,6 +23,8 @@ function assetUrl(path) {
   return /^https?:\/\//.test(path) || path.startsWith('/') ? path : `/${path}`;
 }
 
+const productUrl = (slug) => `/products/${encodeURIComponent(slug)}`;
+
 function randomKey() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -33,7 +37,7 @@ const store = {
   remove(area, key) { try { window[area].removeItem(key); } catch { /* storage unavailable */ } },
 };
 
-/* ── API ──────────────────────────────────────────────────────── */
+/* ── API ── */
 class ApiError extends Error {
   constructor(status, body) {
     super(body?.message || `Request failed (${status})`);
@@ -66,7 +70,7 @@ const API = {
   del: (url) => API.request('DELETE', url),
 };
 
-/* ── Toasts ───────────────────────────────────────────────────── */
+/* ── Toasts ── */
 const Toast = {
   _el: null,
   show(message, type = 'info', duration = 3500) {
@@ -89,17 +93,15 @@ const Toast = {
   info(m) { this.show(m); },
 };
 
-/* ── Bag (server-side) ────────────────────────────────────────── */
+/* ── Bag (server-side) ── */
 const Cart = {
   state: null,
-  async load() {
-    try {
-      this.state = await API.get('/api/cart');
-    } catch {
-      this.state = { items: [], count: 0, subtotalPaise: 0 };
-    }
-    this._badges();
-    return this.state;
+  _loading: null,
+  load() {
+    this._loading ||= API.get('/api/cart')
+      .catch(() => ({ items: [], count: 0, subtotalPaise: 0, quote: { ok: false } }))
+      .then((s) => { this.state = s; this._badges(); this._loading = null; return s; });
+    return this._loading;
   },
   async add(productId, quantity = 1, variantId = null) {
     this.state = await API.post('/api/cart/items', { productId, quantity, variantId });
@@ -122,9 +124,10 @@ const Cart = {
   },
   _badges() {
     const count = this.state?.count || 0;
-    document.querySelectorAll('.nav-bag-count').forEach((el) => {
+    document.querySelectorAll('.bag-count').forEach((el) => {
       el.textContent = count > 0 ? String(count) : '';
       el.setAttribute('data-count', String(count));
+      el.setAttribute('aria-label', `${count} ${count === 1 ? 'item' : 'items'} in bag`);
     });
   },
 };
@@ -137,119 +140,47 @@ const Session = {
   },
 };
 
-/* ── Rendering helpers ────────────────────────────────────────── */
+/* ── Helpers used by page scripts ── */
 function statusClass(code) {
-  return { in: 'in-stock', out: 'out-of-stock', unconfirmed: 'unconfirmed', inactive: 'out-of-stock' }[code] || 'unconfirmed';
+  return code === 'in' ? 'card-status--in' : '';
 }
 
 async function addToBag(product, quantity, button, variant = null) {
-  if (button) button.disabled = true;
+  const label = button ? button.textContent : '';
+  if (button) { button.disabled = true; button.textContent = 'Adding…'; }
   try {
     await Cart.add(product.id, quantity, variant ? variant.id : null);
-    Toast.success(`${product.name}${variant ? ` (${variant.name})` : ''} added to bag`);
+    Toast.success(`${product.name}${variant ? ` (${variant.name})` : ''} added to your bag`);
   } catch (e) {
     Toast.error(e.message);
   } finally {
-    if (button) button.disabled = !(variant ? variant.availability.canBuy : product.availability.canBuy);
+    if (button) { button.disabled = false; button.textContent = label; }
   }
 }
 
+// Same markup as the server-rendered card (lib/site/pages.js).
 function renderProductCard(product) {
   const a = product.availability;
-  const href = `/product.html?slug=${encodeURIComponent(product.slug)}`;
+  const href = productUrl(product.slug);
+  const price = product.minPricePaise !== undefined && product.minPricePaise !== product.maxPricePaise
+    ? `From ${formatINR(product.minPricePaise)}` : formatINR(product.minPricePaise ?? product.pricePaise);
+  const quick = a.canBuy && !(product.variants && product.variants.length);
   const card = document.createElement('article');
-  card.className = 'product-card';
+  card.className = 'card';
   card.innerHTML = `
-    <a href="${href}" class="product-card-img">
-      <img src="${escapeHtml(assetUrl(product.image))}" alt="${escapeHtml(product.alt || product.name)}" loading="lazy" />
-    </a>
-    <div class="product-card-body">
-      <p class="product-card-category">${escapeHtml(product.category)}</p>
-      <h3 class="product-card-name"><a href="${href}">${escapeHtml(product.name)}</a></h3>
-      <p class="product-card-price">${formatINR(product.pricePaise)}</p>
-      <p class="product-card-status ${statusClass(a.code)}">${escapeHtml(a.label)}</p>
-      <div class="product-card-actions">
-        <button class="btn btn-gold" type="button" ${a.canBuy ? '' : 'disabled'}>${a.canBuy ? 'Add to bag' : escapeHtml(a.label)}</button>
-        <a class="btn btn-ghost" href="${href}">View</a>
-      </div>
+    <a class="card-media" href="${href}" tabindex="-1" aria-hidden="true"><img src="${escapeHtml(assetUrl(product.image))}" alt="${escapeHtml(product.alt || product.name)}" loading="lazy" decoding="async"></a>
+    <div class="card-body">
+      <p class="card-cat">${escapeHtml(product.category)}</p>
+      <h3 class="card-title"><a href="${href}">${escapeHtml(product.name)}</a></h3>
+      <p class="card-price">${price}</p>
+      <p class="card-status ${statusClass(a.code)}">${escapeHtml(a.label)}</p>
+      ${quick ? `<button class="btn btn--ghost btn--small card-quick" type="button" data-add-to-bag="${escapeHtml(product.id)}" data-name="${escapeHtml(product.name)}">Add to bag</button>` : ''}
     </div>`;
-  const btn = card.querySelector('button');
-  if (a.canBuy && product.variants && product.variants.length) {
-    btn.textContent = 'Choose option';
-    btn.addEventListener('click', () => { location.href = href; });
-  } else if (a.canBuy) {
-    btn.addEventListener('click', () => addToBag(product, 1, btn));
-  }
   return card;
-}
-
-function renderSkeletonCards(container, count = 8) {
-  container.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const el = document.createElement('div');
-    el.className = 'skeleton-card';
-    el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = '<div class="skeleton-img"></div><div class="skeleton-text"></div><div class="skeleton-text-sm"></div>';
-    container.appendChild(el);
-  }
 }
 
 function notice(container, message, type = 'info') {
   container.innerHTML = `<div class="notice notice--${type}" role="${type === 'error' ? 'alert' : 'status'}">${escapeHtml(message)}</div>`;
-}
-
-/* ── Header / footer ──────────────────────────────────────────── */
-function buildSiteHeader(active) {
-  const cur = (p) => (active === p ? ' class="is-current" aria-current="page"' : '');
-  return `
-    <a class="mark" href="/">
-      <span class="mark-hi" lang="hi">अमानत</span>
-      <span class="mark-en">Amaanat</span>
-    </a>
-    <nav class="nav" id="nav" aria-label="Main">
-      <a href="/shop.html"${cur('shop')}>Shop</a>
-      <a href="/order-tracking.html"${cur('track')}>Track order</a>
-      <a href="/account.html"${cur('account')} data-account-link>Account</a>
-      <a href="/cart.html" class="nav-bag"${cur('cart')}>${BAG_ICON_SVG} Bag <span class="nav-bag-count" data-count="0"></span></a>
-    </nav>
-    <div class="header-right">
-      <a href="/cart.html" class="header-bag-mobile" aria-label="Bag">${BAG_ICON_SVG}<span class="nav-bag-count" data-count="0"></span></a>
-      <button class="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="nav"><span></span><span></span></button>
-    </div>`;
-}
-
-function wireMenu(header) {
-  const menu = header.querySelector('#menu');
-  const nav = header.querySelector('#nav');
-  window.addEventListener('scroll', () => header.classList.toggle('is-scrolled', window.scrollY > 12), { passive: true });
-  if (!menu || !nav) return;
-  menu.addEventListener('click', () => {
-    const open = nav.classList.toggle('is-open');
-    menu.setAttribute('aria-expanded', String(open));
-    menu.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-  });
-  nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => {
-    nav.classList.remove('is-open');
-    menu.setAttribute('aria-expanded', 'false');
-  }));
-}
-
-function initFooter() {
-  const footer = document.querySelector('.site-footer');
-  if (!footer || footer.dataset.init) return;
-  footer.dataset.init = '1';
-  footer.innerHTML = `
-    <div>
-      <p class="mark-hi" lang="hi">अमानत</p>
-      <p class="footer-tag">Some things are too precious to lose.</p>
-    </div>
-    <div class="footer-links">
-      <a href="/shop.html">Shop</a>
-      <a href="/order-tracking.html">Track order</a>
-      <a href="/account.html">Account</a>
-      <a href="https://www.instagram.com/amanaat.ind/" target="_blank" rel="noopener">Instagram</a>
-    </div>
-    <p class="footer-small">Amaanat · India · &copy; ${new Date().getFullYear()}</p>`;
 }
 
 const INDIAN_STATES = [
@@ -266,18 +197,20 @@ function fillStates(select) {
 
 const Forms = {
   clear(form) {
-    form.querySelectorAll('.is-error').forEach((el) => el.classList.remove('is-error'));
+    form.querySelectorAll('.is-error').forEach((el) => { el.classList.remove('is-error'); el.removeAttribute('aria-invalid'); });
     form.querySelectorAll('.form-error').forEach((el) => el.remove());
   },
   errors(form, errors = {}) {
-    for (const [name, message] of Object.entries(errors)) {
+    for (const [name, message] of Object.entries(errors || {})) {
       const input = form.elements[name];
-      if (!input) continue;
+      if (!input || !input.parentElement) continue;
       input.classList.add('is-error');
       input.setAttribute('aria-invalid', 'true');
       const p = document.createElement('p');
       p.className = 'form-error';
+      p.id = `${input.id || name}-error`;
       p.textContent = message;
+      input.setAttribute('aria-describedby', p.id);
       input.parentElement.appendChild(p);
     }
     form.querySelector('.is-error')?.focus();
@@ -287,14 +220,85 @@ const Forms = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  const page = document.body.dataset.page;
+/* ── Page chrome ── */
+function initMenu() {
   const header = document.getElementById('header');
-  if (page && header) {
-    header.innerHTML = buildSiteHeader(page);
-    wireMenu(header);
-    initFooter();
+  const toggle = document.querySelector('.nav-toggle');
+  const nav = document.getElementById('site-nav');
+  if (header) {
+    const onScroll = () => header.classList.toggle('is-scrolled', window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
   }
+  if (!toggle || !nav) return;
+  const close = (focus) => {
+    nav.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+    if (focus) toggle.focus();
+  };
+  toggle.addEventListener('click', () => {
+    nav.classList.add('is-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+    nav.querySelector('a')?.focus();
+  });
+  nav.querySelector('.nav-close')?.addEventListener('click', () => close(true));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('is-open')) close(true); });
+  document.addEventListener('click', (e) => {
+    if (nav.classList.contains('is-open') && !nav.contains(e.target) && !toggle.contains(e.target)) close(false);
+  });
+}
+
+function initQuickAdd() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-add-to-bag]');
+    if (!btn) return;
+    e.preventDefault();
+    addToBag({ id: btn.dataset.addToBag, name: btn.dataset.name || 'Piece' }, 1, btn);
+  });
+}
+
+function initNewsletter() {
+  const form = document.getElementById('newsletter');
+  if (!form) return;
+  const msg = form.querySelector('.newsletter-msg');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = form.email.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Enter a valid email address.'; form.email.focus(); return; }
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    try {
+      const r = await API.post('/api/newsletter', { email });
+      msg.textContent = r.message;
+      form.reset();
+    } catch (err) {
+      msg.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function initReveal() {
+  const els = document.querySelectorAll('.reveal');
+  if (!els.length) return;
+  if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    els.forEach((el) => el.classList.add('is-in'));
+    return;
+  }
+  const io = new IntersectionObserver((entries) => entries.forEach((en) => {
+    if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
+  }), { rootMargin: '0px 0px -8% 0px' });
+  els.forEach((el) => io.observe(el));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initMenu();
+  initQuickAdd();
+  initNewsletter();
+  initReveal();
   Cart.load();
   Session.me().then((s) => {
     document.querySelectorAll('[data-account-link]').forEach((a) => { a.textContent = s.user ? 'Account' : 'Sign in'; });

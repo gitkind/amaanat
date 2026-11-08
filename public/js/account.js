@@ -4,178 +4,181 @@
   const title = document.getElementById('account-title');
   const sub = document.getElementById('account-sub');
   const next = new URLSearchParams(location.search).get('next');
-  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+  const safeNext = next && /^\/(?!\/)[\w\-/]*$/.test(next) ? next : null;
+  let uid = 0;
+  let acct = null;
 
-  const field = (id, name, label, attrs = '') => `<div class="form-group"><label for="${id}">${label}</label><input id="${id}" name="${name}" ${attrs} /></div>`;
+  const field = (name, label, value = '', attrs = '') => {
+    const id = `f-${name}-${++uid}`;
+    return `<div class="form-group"><label for="${id}">${label}</label><input id="${id}" name="${name}" value="${escapeHtml(value)}" ${attrs}></div>`;
+  };
+
+  async function submitting(form, fn) {
+    const btn = form.querySelector('[type="submit"]');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Please wait…';
+    try { return await fn(); } finally { btn.disabled = false; btn.textContent = label; }
+  }
 
   function renderSignedOut() {
     title.textContent = 'Sign in';
     sub.textContent = 'Save addresses, keep a wishlist and see your orders.';
     root.innerHTML = `
       <div class="account-grid">
-        <form class="account-card" id="login-form" novalidate>
+        <form class="panel" id="login-form" novalidate>
           <h2>Sign in</h2>
-          ${field('login-email', 'email', 'Email', 'type="email" autocomplete="email" required')}
-          ${field('login-password', 'password', 'Password', 'type="password" autocomplete="current-password" required')}
-          <button class="btn btn-gold" type="submit">Sign in</button>
+          ${field('email', 'Email', '', 'type="email" autocomplete="email" required')}
+          ${field('password', 'Password', '', 'type="password" autocomplete="current-password" required')}
+          <p class="form-error" data-msg role="alert"></p>
+          <button class="btn btn--block" type="submit">Sign in</button>
         </form>
-        <form class="account-card" id="register-form" novalidate>
+        <form class="panel" id="register-form" novalidate>
           <h2>Create an account</h2>
-          ${field('reg-name', 'fullName', 'Full name', 'autocomplete="name" maxlength="120"')}
-          ${field('reg-email', 'email', 'Email', 'type="email" autocomplete="email" required')}
-          ${field('reg-password', 'password', 'Password (8+ characters)', 'type="password" autocomplete="new-password" minlength="8" maxlength="72" required')}
-          <button class="btn btn-ghost" type="submit">Create account</button>
+          ${field('fullName', 'Full name', '', 'autocomplete="name" maxlength="120"')}
+          ${field('email', 'Email', '', 'type="email" autocomplete="email" required')}
+          ${field('password', 'Password (8 or more characters)', '', 'type="password" autocomplete="new-password" minlength="8" maxlength="72" required')}
+          <button class="btn btn--ghost btn--block" type="submit">Create account</button>
+          <p class="fine-print">Checking out as a guest is always possible.</p>
         </form>
       </div>`;
-
-    const after = () => { location.href = safeNext || '/account.html'; };
-    root.querySelector('#login-form').addEventListener('submit', async (e) => {
+    const after = () => { location.href = safeNext || '/account'; };
+    root.querySelector('#login-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
-      try {
-        await API.post('/api/auth/login', { email: f.email.value, password: f.password.value });
-        after();
-      } catch (err) {
-        Toast.error(err.message);
-      }
+      f.querySelector('[data-msg]').textContent = '';
+      submitting(f, () => API.post('/api/auth/login', { email: f.email.value, password: f.password.value }).then(after))
+        .catch((err) => { f.querySelector('[data-msg]').textContent = err.message; });
     });
-    root.querySelector('#register-form').addEventListener('submit', async (e) => {
+    root.querySelector('#register-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
-      try {
+      submitting(f, async () => {
         const r = await API.post('/api/auth/register', { fullName: f.fullName.value, email: f.email.value, password: f.password.value });
-        if (r.needsConfirmation) {
-          notice(f, r.message, 'info');
-        } else {
-          after();
-        }
-      } catch (err) {
-        Toast.error(err.message);
-      }
+        if (r.needsConfirmation) notice(f, r.message, 'ok');
+        else after();
+      }).catch((err) => Toast.error(err.message));
     });
   }
 
   function addressForm(a = {}) {
     return `
-      <form class="account-card address-form" data-id="${escapeHtml(a.id || '')}" novalidate>
+      <form class="panel address-form" data-id="${escapeHtml(a.id || '')}" novalidate>
         <h3>${a.id ? 'Edit address' : 'Add an address'}</h3>
-        <div class="form-row">
-          <div class="form-group"><label>Label (optional)</label><input name="label" maxlength="40" value="${escapeHtml(a.label || '')}" /></div>
-          <div class="form-group"><label>Full name</label><input name="fullName" required maxlength="120" value="${escapeHtml(a.fullName || '')}" /></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Mobile</label><input name="phone" type="tel" required maxlength="16" value="${escapeHtml(a.phone || '')}" /></div>
-          <div class="form-group"><label>PIN code</label><input name="pin" inputmode="numeric" maxlength="6" required value="${escapeHtml(a.pin || '')}" /></div>
-        </div>
-        <div class="form-group"><label>Address</label><input name="line" required maxlength="200" value="${escapeHtml(a.line || '')}" /></div>
-        <div class="form-group"><label>Apartment, floor (optional)</label><input name="apartment" maxlength="200" value="${escapeHtml(a.apartment || '')}" /></div>
-        <div class="form-row">
-          <div class="form-group"><label>Locality</label><input name="locality" required maxlength="120" value="${escapeHtml(a.locality || '')}" /></div>
-          <div class="form-group"><label>City</label><input name="city" required maxlength="120" value="${escapeHtml(a.city || '')}" /></div>
-        </div>
-        <div class="form-group"><label>State</label><select name="state" required data-value="${escapeHtml(a.state || '')}"></select></div>
-        <label class="check"><input type="checkbox" name="isDefault" ${a.isDefault ? 'checked' : ''} /> Default address</label>
-        <div class="cart-actions"><button class="btn btn-gold" type="submit">Save address</button></div>
+        <div class="form-row">${field('label', 'Label (optional)', a.label || '', 'maxlength="40"')}${field('fullName', 'Full name', a.fullName || '', 'required maxlength="120" autocomplete="name"')}</div>
+        <div class="form-row">${field('phone', 'Mobile', a.phone || '', 'type="tel" required maxlength="16" autocomplete="tel-national"')}${field('pin', 'PIN code', a.pin || '', 'inputmode="numeric" maxlength="6" required autocomplete="postal-code"')}</div>
+        ${field('line', 'Address', a.line || '', 'required maxlength="200" autocomplete="address-line1"')}
+        ${field('apartment', 'Apartment, floor (optional)', a.apartment || '', 'maxlength="200" autocomplete="address-line2"')}
+        <div class="form-row">${field('locality', 'Locality', a.locality || '', 'required maxlength="120"')}${field('city', 'City', a.city || '', 'required maxlength="120" autocomplete="address-level2"')}</div>
+        <div class="form-group"><label for="st-${++uid}">State</label><select id="st-${uid}" name="state" required data-value="${escapeHtml(a.state || '')}"></select></div>
+        <label class="check"><input type="checkbox" name="isDefault" ${a.isDefault ? 'checked' : ''}> Default address</label>
+        <div style="margin-top:1rem;display:flex;gap:.75rem;flex-wrap:wrap"><button class="btn" type="submit">Save address</button>${a.id ? '<button class="btn btn--ghost" type="button" data-cancel>Cancel</button>' : ''}</div>
       </form>`;
   }
 
+  function initStates() {
+    root.querySelectorAll('select[name="state"]').forEach((s) => { if (!s.options.length) { fillStates(s); s.value = s.dataset.value; } });
+  }
+
   async function renderSignedIn() {
-    const [acct, wish, orders] = await Promise.all([
+    const [a, wish, orders] = await Promise.all([
       API.get('/api/account'),
       API.get('/api/wishlist').catch(() => ({ products: [] })),
       API.get('/api/account/orders').catch(() => ({ orders: [] })),
     ]);
+    acct = a;
     title.textContent = acct.profile.fullName ? `Hello, ${acct.profile.fullName}` : 'Your account';
     sub.textContent = acct.user.email;
     root.innerHTML = `
       <div class="account-grid">
-        <section class="account-card">
-          <h2>Orders</h2>
+        <section class="panel" aria-labelledby="orders-title">
+          <h2 id="orders-title">Orders</h2>
           ${orders.orders.length ? orders.orders.map((o) => `
-            <a class="tracking-detail-row order-link" href="/order.html?id=${encodeURIComponent(o.id)}">
+            <a class="kv-row order-link" href="/order?id=${encodeURIComponent(o.id)}">
               <span>${escapeHtml(o.publicRef)} · ${escapeHtml(new Date(o.createdAt).toLocaleDateString('en-IN'))}</span>
               <span><span class="status-badge status-badge--${escapeHtml(o.paymentStatus)}">${escapeHtml(o.paymentStatusLabel)}</span> ${formatINR(o.totalPaise)}</span>
             </a>`).join('') : '<p class="fine-print">No orders yet.</p>'}
         </section>
-        <form class="account-card" id="profile-form" novalidate>
+        <form class="panel" id="profile-form" novalidate>
           <h2>Profile</h2>
-          <div class="form-group"><label for="p-name">Full name</label><input id="p-name" name="fullName" maxlength="120" value="${escapeHtml(acct.profile.fullName)}" /></div>
-          <div class="form-group"><label for="p-phone">Mobile</label><input id="p-phone" name="phone" type="tel" maxlength="16" value="${escapeHtml(acct.profile.phone)}" /></div>
-          <div class="cart-actions"><button class="btn btn-gold" type="submit">Save profile</button><button class="btn btn-ghost" type="button" id="logout">Sign out</button></div>
+          ${field('fullName', 'Full name', acct.profile.fullName, 'maxlength="120" autocomplete="name"')}
+          ${field('phone', 'Mobile', acct.profile.phone, 'type="tel" maxlength="16" autocomplete="tel-national"')}
+          <div style="display:flex;gap:.75rem;flex-wrap:wrap"><button class="btn" type="submit">Save profile</button><button class="btn btn--ghost" type="button" id="logout">Sign out</button></div>
         </form>
       </div>
-      <section class="account-section">
-        <h2>Saved addresses</h2>
-        <div class="account-grid" id="addresses">
-          ${acct.addresses.map((a) => `
-            <div class="account-card">
-              <p><strong>${escapeHtml(a.label || a.fullName)}</strong> ${a.isDefault ? '<span class="status-badge status-badge--paid">Default</span>' : ''}</p>
-              <p class="fine-print">${escapeHtml([a.fullName, a.line, a.apartment, a.locality, a.city, a.state, a.pin].filter(Boolean).join(', '))} · ${escapeHtml(a.phone)}</p>
-              <div class="cart-actions"><button class="btn btn-ghost" type="button" data-edit="${escapeHtml(a.id)}">Edit</button><button class="cart-item-remove" type="button" data-delete="${escapeHtml(a.id)}">Delete</button></div>
+      <section class="account-section" aria-labelledby="addr-title">
+        <h2 id="addr-title" style="font-size:var(--step-2)">Saved addresses</h2>
+        <div class="account-grid">
+          ${acct.addresses.map((x) => `
+            <div class="panel">
+              <p><strong>${escapeHtml(x.label || x.fullName)}</strong> ${x.isDefault ? '<span class="status-badge status-badge--paid">Default</span>' : ''}</p>
+              <p class="fine-print">${escapeHtml([x.fullName, x.line, x.apartment, x.locality, x.city, x.state, x.pin].filter(Boolean).join(', '))} · ${escapeHtml(x.phone)}</p>
+              <div style="display:flex;gap:1rem;align-items:center;margin-top:1rem"><button class="btn btn--ghost btn--small" type="button" data-edit="${escapeHtml(x.id)}">Edit</button><button class="remove-link" type="button" data-delete="${escapeHtml(x.id)}">Delete</button></div>
             </div>`).join('')}
           ${acct.addresses.length < 10 ? addressForm() : ''}
         </div>
       </section>
-      <section class="account-section">
-        <h2>Wishlist</h2>
-        <div class="product-grid" id="wishlist"></div>
+      <section class="account-section" aria-labelledby="wish-title">
+        <div class="section-head" style="margin-bottom:1.5rem"><h2 id="wish-title" style="font-size:var(--step-2)">Wishlist</h2><a class="link-arrow" href="/wishlist">Open wishlist</a></div>
+        <div class="product-grid" id="wishlist-grid"></div>
       </section>`;
-
-    root.querySelectorAll('select[name="state"]').forEach((s) => { fillStates(s); s.value = s.dataset.value; });
-    const wl = root.querySelector('#wishlist');
-    if (wish.products.length) wish.products.forEach((p) => wl.appendChild(renderProductCard(p)));
+    initStates();
+    const wl = root.querySelector('#wishlist-grid');
+    if (wish.products.length) wish.products.slice(0, 4).forEach((p) => wl.appendChild(renderProductCard(p)));
     else wl.innerHTML = '<p class="fine-print">Save pieces from their product page.</p>';
+  }
 
-    root.querySelector('#profile-form').addEventListener('submit', async (e) => {
+  // Delegated listeners, attached once.
+  root.addEventListener('submit', async (e) => {
+    const f = e.target;
+    if (f.id === 'profile-form') {
       e.preventDefault();
-      Forms.clear(e.target);
+      Forms.clear(f);
       try {
-        await API.put('/api/account/profile', Forms.data(e.target));
+        await submitting(f, () => API.put('/api/account/profile', Forms.data(f)));
         Toast.success('Profile saved');
       } catch (err) {
-        Forms.errors(e.target, err.body.errors);
+        Forms.errors(f, err.body.errors);
         Toast.error(err.message);
       }
-    });
-    root.querySelector('#logout').addEventListener('click', async () => {
-      await API.post('/api/auth/logout').catch(() => {});
-      location.href = '/';
-    });
-    root.addEventListener('submit', async (e) => {
-      if (!e.target.classList.contains('address-form')) return;
+    } else if (f.classList.contains('address-form')) {
       e.preventDefault();
-      const f = e.target;
       Forms.clear(f);
       const body = { ...Forms.data(f), isDefault: f.isDefault.checked };
       try {
-        await (f.dataset.id ? API.put(`/api/account/addresses/${f.dataset.id}`, body) : API.post('/api/account/addresses', body));
+        await submitting(f, () => (f.dataset.id ? API.put(`/api/account/addresses/${f.dataset.id}`, body) : API.post('/api/account/addresses', body)));
         Toast.success('Address saved');
         renderSignedIn();
       } catch (err) {
         Forms.errors(f, err.body.errors);
         Toast.error(err.message);
       }
-    });
-    root.addEventListener('click', async (e) => {
-      const del = e.target.closest('[data-delete]');
-      const edit = e.target.closest('[data-edit]');
-      if (del && confirm('Delete this address?')) {
-        await API.del(`/api/account/addresses/${del.dataset.delete}`).catch((err) => Toast.error(err.message));
-        renderSignedIn();
-      }
-      if (edit) {
-        const a = acct.addresses.find((x) => x.id === edit.dataset.edit);
-        const card = edit.closest('.account-card');
-        card.outerHTML = addressForm(a);
-        root.querySelectorAll('select[name="state"]').forEach((s) => { if (!s.options.length) { fillStates(s); s.value = s.dataset.value; } });
-      }
-    });
-  }
+    }
+  });
+  root.addEventListener('click', async (e) => {
+    if (e.target.id === 'logout') {
+      await API.post('/api/auth/logout').catch(() => {});
+      location.href = '/';
+      return;
+    }
+    const del = e.target.closest('[data-delete]');
+    if (del && confirm('Delete this address?')) {
+      await API.del(`/api/account/addresses/${del.dataset.delete}`).catch((err) => Toast.error(err.message));
+      renderSignedIn();
+    }
+    const edit = e.target.closest('[data-edit]');
+    if (edit) {
+      const a = acct.addresses.find((x) => x.id === edit.dataset.edit);
+      edit.closest('.panel').outerHTML = addressForm(a);
+      initStates();
+    }
+    if (e.target.closest('[data-cancel]')) renderSignedIn();
+  });
 
   const s = await Session.me();
   if (!s.accountsEnabled) {
     title.textContent = 'Accounts';
-    notice(root, 'Customer accounts are not configured on this server yet. You can still check out as a guest.', 'info');
+    notice(root, 'Customer accounts are not available yet. You can still check out as a guest.');
     return;
   }
   if (s.user) renderSignedIn().catch((e) => notice(root, e.message, 'error'));

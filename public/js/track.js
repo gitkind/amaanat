@@ -2,6 +2,9 @@
 (() => {
   const form = document.getElementById('track-form');
   const out = document.getElementById('track-result');
+  const row = (label, value) => `<div class="kv-row"><span class="label">${label}</span><span>${value}</span></div>`;
+  const badge = (status, label) => `<span class="status-badge status-badge--${escapeHtml(status)}">${escapeHtml(label || String(status).replace(/_/g, ' '))}</span>`;
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     Forms.clear(form);
@@ -11,24 +14,28 @@
     if (!/^AM-[A-F0-9]{8}$/.test(ref)) errors.ref = 'Use the reference from your confirmation, like AM-1A2B3C4D.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter the email used at checkout.';
     if (Object.keys(errors).length) return Forms.errors(form, errors);
-    out.innerHTML = '';
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    out.innerHTML = '<div class="spinner" role="status" aria-label="Searching"></div>';
     try {
-      // POST keeps the email out of URLs and server logs.
+      // POST keeps the email out of URLs and logs.
       const { order: o } = await API.post('/api/orders/lookup', { ref, email });
       out.innerHTML = `
-        <div class="tracking-result">
-          <h2>${escapeHtml(o.publicRef)}</h2>
-          <div class="tracking-detail-row"><span class="label">Payment</span><span class="status-badge status-badge--${escapeHtml(o.paymentStatus)}">${escapeHtml(o.paymentStatusLabel)}</span></div>
-          <div class="tracking-detail-row"><span class="label">Order</span><span class="status-badge status-badge--${escapeHtml(o.fulfilmentStatus)}">${escapeHtml(o.fulfilmentStatus.replace('_', ' '))}</span></div>
-          <div class="tracking-detail-row"><span class="label">Placed</span><span>${escapeHtml(new Date(o.createdAt).toLocaleDateString('en-IN'))}</span></div>
-          ${o.tracking ? `<div class="tracking-detail-row"><span class="label">Courier</span><span>${escapeHtml(o.tracking.courier || '')} ${escapeHtml(o.tracking.number || '')}</span></div>` : ''}
-          <div class="tracking-items"><h3>Items</h3>
-            ${o.items.map((i) => `<div class="tracking-item-row"><span>${escapeHtml(i.name)} × ${i.quantity}</span><span>${formatINR(i.lineTotalPaise)}</span></div>`).join('')}
-            <div class="tracking-item-row total"><span>Total</span><span>${formatINR(o.totalPaise)}</span></div>
-          </div>
-        </div>`;
+        <section class="panel" aria-labelledby="track-ref">
+          <h2 id="track-ref">${escapeHtml(o.publicRef)}</h2>
+          ${row('Payment', badge(o.paymentStatus, o.paymentStatusLabel))}
+          ${row('Order', badge(o.fulfilmentStatus))}
+          ${row('Placed', escapeHtml(new Date(o.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })))}
+          ${o.tracking ? row('Courier', `${escapeHtml(o.tracking.courier || '')} ${o.tracking.url ? `<a class="text-link" href="${escapeHtml(o.tracking.url)}" target="_blank" rel="noopener">${escapeHtml(o.tracking.number || 'Track parcel')}</a>` : escapeHtml(o.tracking.number || '')}`) : ''}
+          ${o.items.map((i) => row(`${escapeHtml(i.name)} × ${i.quantity}`, formatINR(i.lineTotalPaise))).join('')}
+          ${row('Total', `<strong>${formatINR(o.totalPaise)}</strong>`)}
+        </section>`;
+      out.querySelector('h2').setAttribute('tabindex', '-1');
+      out.querySelector('h2').focus();
     } catch (err) {
       notice(out, err.message, 'error');
+    } finally {
+      btn.disabled = false;
     }
   });
 })();

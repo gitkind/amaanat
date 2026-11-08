@@ -490,7 +490,27 @@
         ${r.customers.map((c, i) => `<tr ${c.key ? `class="clickable" data-i="${i}"` : ''}><td data-label="Customer">${esc(c.fullName)}<br><small>${esc(c.email)}</small></td><td data-label="Phone">${esc(c.phone || '—')}</td>
           <td class="num" data-label="Orders">${c.orders}</td><td class="num" data-label="Paid">${inr(c.paidPaise)}</td><td data-label="Last order">${date(c.lastOrderAt)}</td><td data-label="Account">${c.hasAccount ? 'Yes' : 'Guest'}</td></tr>`).join('')}
       </tbody></table></div>` : empty('No customers yet. Customers appear after their first order.')}
-      <div id="cdetail"></div>`;
+      <div id="cdetail"></div>
+      ${isOwner() ? '<section class="card" id="nl" style="margin-top:1.25rem"><h2>Newsletter sign-ups</h2><div class="state"><div class="spinner"></div></div></section>' : ''}`;
+    if (isOwner()) {
+      api('GET', '/api/admin/newsletter').then((n) => {
+        const box = $('#nl');
+        if (!box) return;
+        box.innerHTML = `<div class="head"><h2>Newsletter sign-ups (${n.total})</h2>${n.total ? '<button class="btn small" type="button" id="nlcsv">Download CSV</button>' : ''}</div>
+          ${n.subscribers.length ? `<div class="table-wrap"><table class="stack"><thead><tr><th>Email</th><th>Signed up</th><th>Where</th></tr></thead><tbody>
+            ${n.subscribers.map((x) => `<tr><td data-label="Email">${esc(x.email)}</td><td data-label="Signed up">${date(x.consentAt)}</td><td data-label="Where">${esc(x.source || '')}</td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="hint">No sign-ups yet.</p>'}
+          <p class="hint">The site does not send emails itself. Export the list to your email tool, and honour unsubscribe requests.</p>`;
+        $('#nlcsv')?.addEventListener('click', () => {
+          const csv = ['email,signed_up,source', ...n.subscribers.map((x) => [x.email, x.consentAt, x.source || ''].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join(String.fromCharCode(10));
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+          a.download = 'amaanat-newsletter.csv';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+      }).catch((err) => { const box = $('#nl'); if (box) box.innerHTML = `<p class="error">${esc(err.message)}</p>`; });
+    }
     $('#csearch').addEventListener('submit', (e) => { e.preventDefault(); location.hash = `#/customers?q=${encodeURIComponent(e.target.q.value)}`; });
     view.querySelectorAll('tr[data-i]').forEach((tr) => tr.addEventListener('click', async () => {
       const c = r.customers[Number(tr.dataset.i)];
@@ -590,7 +610,7 @@
       <p class="hint">Write only confirmed business policies. Unpublished pages show customers a “being prepared” message.</p>
       <div class="table-wrap"><table class="stack"><thead><tr><th>Page</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>
         ${list.map((p) => `<tr><td data-label="Page">${esc(PAGE_NAMES[p.slug])}</td><td data-label="Status">${p.published ? '<span class="badge ok">published</span>' : p.body ? '<span class="badge warn">draft</span>' : '<span class="badge">empty</span>'}</td>
-          <td data-label="Updated">${date(p.updatedAt)} ${p.updatedBy ? `<small>${esc(p.updatedBy)}</small>` : ''}</td><td data-label=""><a class="btn small" href="#/pages?edit=${p.slug}">${isOwner() ? 'Edit' : 'View'}</a> ${p.published ? `<a class="btn small" href="/${p.slug === 'returns' ? 'returns' : p.slug}.html" target="_blank" rel="noopener">Open ↗</a>` : ''}</td></tr>`).join('')}
+          <td data-label="Updated">${date(p.updatedAt)} ${p.updatedBy ? `<small>${esc(p.updatedBy)}</small>` : ''}</td><td data-label=""><a class="btn small" href="#/pages?edit=${p.slug}">${isOwner() ? 'Edit' : 'View'}</a> ${p.published ? `<a class="btn small" href="/${p.slug}" target="_blank" rel="noopener">Open ↗</a>` : ''}</td></tr>`).join('')}
       </tbody></table></div>
       ${cur ? `<form class="card" id="pgform" style="margin-top:1.25rem"><h2>${esc(PAGE_NAMES[cur.slug])}</h2>
         <div class="field"><label for="pt">Title</label><input id="pt" name="title" required maxlength="120" value="${esc(cur.title || PAGE_NAMES[cur.slug])}" ${isOwner() ? '' : 'disabled'} /></div>

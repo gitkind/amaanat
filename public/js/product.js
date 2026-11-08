@@ -1,92 +1,76 @@
 'use strict';
-(async () => {
-  const root = document.getElementById('product-detail');
-  const slug = new URLSearchParams(location.search).get('slug') || '';
-  if (!/^[a-z0-9-]{1,120}$/.test(slug)) {
-    root.innerHTML = '<div class="empty-state"><h2>Piece not found</h2><p><a class="btn btn-ghost" href="/shop.html">Back to the shop</a></p></div>';
-    return;
-  }
-  let data;
-  try {
-    data = await API.get(`/api/products/${encodeURIComponent(slug)}`);
-  } catch (e) {
-    root.innerHTML = `<div class="empty-state"><h2>${e.status === 404 ? 'Piece not found' : 'Could not load this piece'}</h2><p>${escapeHtml(e.message)}</p><p><a class="btn btn-ghost" href="/shop.html">Back to the shop</a></p></div>`;
-    return;
-  }
-  const p = data.product;
-  const a = p.availability;
-  document.title = `${p.name} — Amaanat`;
-  document.getElementById('crumb-name').textContent = p.name;
-
-  const thumbs = p.images.length > 1
-    ? `<div class="thumbs">${p.images.map((src, i) => `<button type="button" class="thumb${i ? '' : ' is-active'}" data-src="${escapeHtml(assetUrl(src))}" aria-label="Image ${i + 1}"><img src="${escapeHtml(assetUrl(src))}" alt="" /></button>`).join('')}</div>`
-    : '';
-  root.innerHTML = `
-    <div class="product-detail-image">
-      <img id="main-img" src="${escapeHtml(assetUrl(p.image))}" alt="${escapeHtml(p.alt || p.name)}" />
-      ${thumbs}
-    </div>
-    <div class="product-detail-info">
-      <p class="eyebrow">${escapeHtml(p.category)}</p>
-      <h1>${escapeHtml(p.name)}</h1>
-      <p class="product-detail-price" id="price">${p.minPricePaise !== p.maxPricePaise ? `From ${formatINR(p.minPricePaise)}` : formatINR(p.minPricePaise ?? p.pricePaise)}</p>
-      <p class="product-detail-status ${statusClass(a.code)}">${escapeHtml(a.label)}</p>
-      <p class="product-detail-desc">${escapeHtml(p.description)}</p>
-      ${p.variants.length ? `<fieldset class="variant-picker"><legend>Choose an option</legend>${p.variants.map((v) => `
-        <label class="variant-option${v.availability.canBuy ? '' : ' is-unavailable'}"><input type="radio" name="variant" value="${escapeHtml(v.id)}" ${v.availability.canBuy ? '' : 'disabled'} />
-        <span>${escapeHtml(v.name)}</span><small>${formatINR(v.pricePaise)} · ${escapeHtml(v.availability.label)}</small></label>`).join('')}</fieldset>` : ''}
-      <div class="quantity-selector" ${a.canBuy ? '' : 'hidden'}>
-        <button class="qty-btn" type="button" data-step="-1" aria-label="Decrease quantity">−</button>
-        <span class="qty-value" id="qty" aria-live="polite">1</span>
-        <button class="qty-btn" type="button" data-step="1" aria-label="Increase quantity">+</button>
-      </div>
-      <div class="product-detail-actions">
-        <button class="btn btn-gold" id="add" type="button" ${a.canBuy ? '' : 'disabled'}>${a.canBuy ? 'Add to bag' : escapeHtml(a.label)}</button>
-        <button class="btn btn-ghost" id="wish" type="button">Save to wishlist</button>
-      </div>
-      ${a.code === 'unconfirmed' ? '<p class="fine-print">This piece is not available to order yet. Stock is still being confirmed.</p>' : ''}
-    </div>`;
-
+/* Enhances the server-rendered product page: gallery, options, quantity, add to bag, wishlist. */
+(() => {
+  const dataEl = document.getElementById('product-data');
+  if (!dataEl) return;
+  const p = JSON.parse(dataEl.textContent);
+  const form = document.getElementById('buy-form');
+  const addBtn = document.getElementById('add');
+  const qtyOut = document.getElementById('qty');
+  const priceEl = document.getElementById('pdp-price');
+  const statusEl = document.getElementById('pdp-status');
+  const qtyWrap = form.querySelector('.qty');
   let qty = 1;
   let variant = null;
-  const qtyEl = document.getElementById('qty');
-  const maxQty = () => Math.max(1, (variant ? variant.availability.maxQuantity : a.maxQuantity) || 1);
-  root.querySelectorAll('.qty-btn').forEach((b) => b.addEventListener('click', () => {
-    qty = Math.min(maxQty(), Math.max(1, qty + Number(b.dataset.step)));
-    qtyEl.textContent = String(qty);
+
+  // Gallery
+  const main = document.querySelector('#gallery-main img');
+  document.querySelectorAll('.gallery-thumb').forEach((btn) => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.index);
+    const thumbImg = btn.querySelector('img');
+    main.removeAttribute('srcset');
+    main.src = thumbImg.currentSrc || thumbImg.src || p.images[i];
+    if (thumbImg.srcset) { main.srcset = thumbImg.srcset; main.sizes = '(max-width: 860px) 100vw, 56vw'; }
+    document.querySelectorAll('.gallery-thumb').forEach((b) => b.removeAttribute('aria-current'));
+    btn.setAttribute('aria-current', 'true');
   }));
-  const addBtn = document.getElementById('add');
-  if (p.variants.length) {
-    addBtn.disabled = true;
-    if (a.canBuy) addBtn.textContent = 'Choose an option';
-    root.querySelectorAll('input[name="variant"]').forEach((r) => r.addEventListener('change', () => {
-      variant = p.variants.find((v) => v.id === r.value);
-      document.getElementById('price').textContent = formatINR(variant.pricePaise);
-      qty = 1;
-      qtyEl.textContent = '1';
-      addBtn.disabled = !variant.availability.canBuy;
-      addBtn.textContent = 'Add to bag';
-    }));
+
+  const unit = () => (variant ? variant.availability : p.availability);
+  const maxQty = () => Math.max(1, unit().maxQuantity || 1);
+  function paintQty() {
+    qtyOut.textContent = String(qty);
+    const [dec, inc] = qtyWrap.querySelectorAll('button');
+    dec.disabled = qty <= 1;
+    inc.disabled = qty >= maxQty();
   }
-  if (a.canBuy) addBtn.addEventListener('click', () => addToBag(p, qty, addBtn, variant));
 
-  root.querySelectorAll('.thumb').forEach((b) => b.addEventListener('click', () => {
-    document.getElementById('main-img').src = b.dataset.src;
-    root.querySelectorAll('.thumb').forEach((x) => x.classList.toggle('is-active', x === b));
+  qtyWrap.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    qty = Math.min(maxQty(), Math.max(1, qty + Number(b.dataset.step)));
+    paintQty();
   }));
 
+  form.querySelectorAll('input[name="variant"]').forEach((r) => r.addEventListener('change', () => {
+    variant = p.variants.find((v) => v.id === r.value);
+    priceEl.textContent = formatINR(variant.pricePaise);
+    statusEl.textContent = variant.availability.label;
+    statusEl.classList.toggle('pdp-status--in', variant.availability.canBuy);
+    qty = 1;
+    qtyWrap.hidden = !variant.availability.canBuy;
+    addBtn.disabled = !variant.availability.canBuy;
+    addBtn.textContent = variant.availability.canBuy ? 'Add to bag' : variant.availability.label;
+    paintQty();
+  }));
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (p.variants.length && !variant) { Toast.info('Choose an option first.'); return; }
+    if (!unit().canBuy) return;
+    addToBag(p, qty, addBtn, variant);
+  });
+  paintQty();
+
+  // Wishlist (accounts only)
   const wish = document.getElementById('wish');
-  const session = await Session.me();
-  if (!session.accountsEnabled) {
-    wish.hidden = true;
-  } else if (!session.user) {
-    wish.addEventListener('click', () => { location.href = `/account.html?next=${encodeURIComponent(location.pathname + location.search)}`; });
-  } else {
+  Session.me().then(async (session) => {
+    if (!session.accountsEnabled) return;
+    wish.hidden = false;
+    if (!session.user) {
+      wish.addEventListener('click', () => { location.href = `/account?next=${encodeURIComponent(location.pathname)}`; });
+      return;
+    }
     let saved = false;
-    try {
-      saved = (await API.get('/api/wishlist')).products.some((x) => x.id === p.id);
-    } catch { /* ignore */ }
-    const paint = () => { wish.textContent = saved ? 'Saved ♥' : 'Save to wishlist'; wish.setAttribute('aria-pressed', String(saved)); };
+    try { saved = (await API.get('/api/wishlist')).products.some((x) => x.id === p.id); } catch { /* ignore */ }
+    const paint = () => { wish.textContent = saved ? 'Saved to wishlist ♥' : 'Save to wishlist'; wish.setAttribute('aria-pressed', String(saved)); };
     paint();
     wish.addEventListener('click', async () => {
       wish.disabled = true;
@@ -95,18 +79,11 @@
         await (saved ? API.del(url) : API.put(url));
         saved = !saved;
         paint();
-      } catch (e) {
-        Toast.error(e.message);
+      } catch (err) {
+        Toast.error(err.message);
       } finally {
         wish.disabled = false;
       }
     });
-  }
-
-  if (data.related.length) {
-    const sec = document.getElementById('related-section');
-    const grid = document.getElementById('related-grid');
-    data.related.forEach((r) => grid.appendChild(renderProductCard(r)));
-    sec.hidden = false;
-  }
+  });
 })();

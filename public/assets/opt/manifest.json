@@ -1,0 +1,170 @@
+{
+  "assets/products/boho-charm-necklace.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/boho-charm-necklace-400.webp",
+        "bytes": 6114
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/boho-charm-necklace-720.webp",
+        "bytes": 15778
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/boho-charm-necklace-1080.webp",
+        "bytes": 33128
+      }
+    ]
+  },
+  "assets/products/cherry-charm-necklace.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/cherry-charm-necklace-400.webp",
+        "bytes": 8018
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/cherry-charm-necklace-720.webp",
+        "bytes": 19598
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/cherry-charm-necklace-1080.webp",
+        "bytes": 37084
+      }
+    ]
+  },
+  "assets/products/daisy-bloom-set.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/daisy-bloom-set-400.webp",
+        "bytes": 17704
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/daisy-bloom-set-720.webp",
+        "bytes": 47644
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/daisy-bloom-set-1080.webp",
+        "bytes": 79654
+      }
+    ]
+  },
+  "assets/products/marquise-clover-pendant.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/marquise-clover-pendant-400.webp",
+        "bytes": 29006
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/marquise-clover-pendant-720.webp",
+        "bytes": 86006
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/marquise-clover-pendant-1080.webp",
+        "bytes": 145066
+      }
+    ]
+  },
+  "assets/products/petal-leaf-anklet.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/petal-leaf-anklet-400.webp",
+        "bytes": 12540
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/petal-leaf-anklet-720.webp",
+        "bytes": 40898
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/petal-leaf-anklet-1080.webp",
+        "bytes": 78472
+      }
+    ]
+  },
+  "assets/products/starflower-pendant.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/starflower-pendant-400.webp",
+        "bytes": 14880
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/starflower-pendant-720.webp",
+        "bytes": 33524
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/starflower-pendant-1080.webp",
+        "bytes": 55642
+      }
+    ]
+  },
+  "assets/products/vintage-clover-pendant.jpg": {
+    "width": 1400,
+    "height": 1344,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/vintage-clover-pendant-400.webp",
+        "bytes": 24522
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/vintage-clover-pendant-720.webp",
+        "bytes": 67012
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/vintage-clover-pendant-1080.webp",
+        "bytes": 113408
+      }
+    ]
+  },
+  "assets/post.jpg": {
+    "width": 1080,
+    "height": 1080,
+    "variants": [
+      {
+        "w": 400,
+        "src": "/assets/opt/post-400.webp",
+        "bytes": 11862
+      },
+      {
+        "w": 720,
+        "src": "/assets/opt/post-720.webp",
+        "bytes": 25348
+      },
+      {
+        "w": 1080,
+        "src": "/assets/opt/post-1080.webp",
+        "bytes": 43320
+      }
+    ]
+  }
+}

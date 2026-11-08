@@ -41,7 +41,10 @@ describe("static files and catalogue", () => {
   test("only public/ is served; secrets and source are not", async () => {
     const c = t.client();
     assert.equal((await c.get("/")).status, 200);
-    assert.equal((await c.get("/shop.html")).status, 200);
+    assert.equal((await c.get("/shop")).status, 200);
+    const legacy = await c.get("/shop.html");
+    assert.equal(legacy.status, 301);
+    assert.equal(legacy.headers.get("location"), "/shop");
     assert.equal((await c.get("/assets/products/marquise-clover-pendant.jpg")).status, 200);
     for (const p of ["/.env", "/.env.example", "/package.json", "/lib/app.js", "/database/migrations/001_base.sql", "/.git/config", "/..%2Fpackage.json", "/%2e%2e/package.json"]) {
       assert.equal((await c.get(p)).status, 404, p);
