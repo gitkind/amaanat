@@ -1,0 +1,9 @@
+{
+  "shippingPaise": null,
+  "shippingConfirmed": false,
+  "taxConfirmed": false,
+  "taxRateBps": null,
+  "whatsappE164": null,
+  "contactEmail": null,
+  "lowStockThreshold": 2
+}
