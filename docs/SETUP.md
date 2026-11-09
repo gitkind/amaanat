@@ -42,6 +42,7 @@ There are no demo or shared admin accounts.
 | `005_service_role_grants.sql` | Table access for the server's `service_role` (needed on projects without default grants). |
 | `006_cod.sql` | Cash on Delivery: `orders.payment_method`, the `cod_enabled` switch (off by default) and COD-aware checkout, fulfilment and admin functions. |
 | `007_cms.sql` | Website editor: drafts, publishing and version history for the homepage, About, Meet the Founder and menu/footer. Until it is applied the store shows the original design and the editor asks for it. |
+| `008_team.sql` | Admin → Team: the owner can add, re-role and remove admins from the dashboard. |
 
 All of them only add things and can be re-run safely. None of them changes prices, stock, settings values or existing orders.
 
@@ -50,6 +51,10 @@ To find duplicate client tokens (if any rows come back, the 002 unique index wil
 ```sql
 select client_token, count(*) from orders where client_token is not null group by 1 having count(*) > 1;
 ```
+
+### Adding more admins
+
+After `008_team.sql` is applied, the owner can do this in **Admin → Team**: the person first creates an account at `/account`, then the owner enters that email and picks **Manager** or **Owner**. Owners can't remove or demote themselves, and the store always keeps at least one owner. The SQL below is only needed for the very first owner.
 
 ### Make yourself the owner
 

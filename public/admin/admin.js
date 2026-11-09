@@ -137,6 +137,7 @@
     [/^#\/customers$/, customers, 'Customers'],
     [/^#\/settings$/, settings, 'Settings'],
     [/^#\/pages$/, pages, 'Pages'],
+    [/^#\/team$/, team, 'Team'],
     [/^#\/audit$/, audit, 'Audit log'],
   ];
   let lastHash = location.hash;
@@ -657,6 +658,71 @@
       const f = e.target;
       try { await withButton(f.querySelector('button'), () => api('PUT', `/api/admin/pages/${cur.slug}`, { title: f.title.value, body: f.body.value, published: f.published.checked })); toast('Page saved', 'ok'); pages(); } catch (err) { formErrors(f, err); }
     });
+  }
+
+
+  /* ── Team (owner only) ── */
+  async function team() {
+    if (!isOwner()) { view.innerHTML = empty('Only the owner can manage the team.'); return; }
+    const { members } = await api('GET', '/api/admin/team');
+    const roleSelect = (m) => `<select data-role="${esc(m.userId)}" aria-label="Role for ${esc(m.email)}" ${m.isYou ? 'disabled' : ''}>
+      ${['owner', 'manager'].map((r) => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${r === 'owner' ? 'Owner' : 'Manager'}</option>`).join('')}</select>`;
+    view.innerHTML = `
+      <div class="head"><div><h1>Team</h1><p class="sub">Give people their own admin login. Never share your password.</p></div></div>
+      <div class="grid two">
+        <section class="card"><h2>Add a team member</h2>
+          <ol class="hint" style="padding-left:1.1rem;margin:0 0 1rem">
+            <li>Ask them to create an account at <a href="/account" target="_blank" rel="noopener">/account</a> using their own email (and confirm it if asked).</li>
+            <li>Enter that email below and choose a role.</li>
+            <li>They can then sign in at <b>/admin/</b>.</li></ol>
+          <form id="team-add" novalidate>
+            <div class="field"><label for="t-email">Their email</label><input id="t-email" name="email" type="email" autocomplete="off" required maxlength="254" /></div>
+            <div class="field"><label for="t-role">Role</label><select id="t-role" name="role"><option value="manager" selected>Manager</option><option value="owner">Owner</option></select></div>
+            <button class="btn primary" type="submit">Give admin access</button>
+          </form>
+        </section>
+        <section class="card"><h2>Roles</h2>
+          <dl class="kv">
+            <dt><span class="badge">Manager</span></dt><dd>Products, inventory, orders (confirm, ship, deliver, cancel) and customers.</dd>
+            <dt><span class="badge ok">Owner</span></dt><dd>Everything: settings, policies, the website editor, recording cash, refunds, the team and the audit log.</dd>
+          </dl>
+          <p class="hint" style="margin-top:1rem">Removing someone takes away admin access straight away. Their customer account and order history stay.</p>
+        </section>
+      </div>
+      <h2 style="margin-top:.5rem">People with admin access (${members.length})</h2>
+      <div class="table-wrap"><table class="stack"><thead><tr><th>Email</th><th>Role</th><th>Added</th><th></th></tr></thead><tbody>
+        ${members.map((m) => `<tr><td data-label="Email">${esc(m.email)}${m.isYou ? ' <span class="badge">You</span>' : ''}</td>
+          <td data-label="Role">${roleSelect(m)}</td><td data-label="Added">${date(m.addedAt)}</td>
+          <td data-label="">${m.isYou ? '<span class="hint">Another owner can change your access</span>' : `<button class="btn small danger" type="button" data-remove="${esc(m.userId)}" data-email="${esc(m.email)}">Remove</button>`}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    $('#team-add').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      f.email.classList.remove('invalid');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.value.trim())) { f.email.classList.add('invalid'); f.email.focus(); toast('Enter a valid email address.', 'bad'); return; }
+      const role = f.role.value;
+      if (role === 'owner' && !window.confirm(`Give ${f.email.value.trim()} full owner access, including settings, refunds and the team?`)) return;
+      try {
+        await withButton(f.querySelector('button'), () => api('POST', '/api/admin/team', { email: f.email.value.trim(), role }));
+        toast('Admin access given', 'ok');
+        team();
+      } catch (err) { formErrors(f, err); }
+    });
+    view.querySelectorAll('select[data-role]').forEach((sel) => sel.addEventListener('change', async () => {
+      const prev = sel.value === 'owner' ? 'manager' : 'owner';
+      try {
+        await api('PUT', `/api/admin/team/${sel.dataset.role}`, { role: sel.value });
+        toast('Role updated', 'ok');
+      } catch (err) { sel.value = prev; toast(err.message, 'bad'); }
+    }));
+    view.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!window.confirm(`Remove admin access for ${btn.dataset.email}? Their customer account stays.`)) return;
+      try {
+        await withButton(btn, () => api('DELETE', `/api/admin/team/${btn.dataset.remove}`));
+        toast('Admin access removed', 'ok');
+        team();
+      } catch (err) { toast(err.message, 'bad'); }
+    }));
   }
 
   /* ── Audit ── */
