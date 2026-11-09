@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "bom1"
+  ],
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
@@ -32,6 +35,21 @@
         {
           "key": "X-Frame-Options",
           "value": "DENY"
+        }
+      ]
+    },
+    {
+      "source": "/(styles\\.css|app\\.js|js/.+\\.js)",
+      "has": [
+        {
+          "type": "query",
+          "key": "v"
+        }
+      ],
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
         }
       ]
     },

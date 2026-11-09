@@ -9,7 +9,7 @@ import sharp from "sharp";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const OUT = path.join(PUBLIC, "assets", "opt");
-const WIDTHS = [400, 720, 1080];
+const WIDTHS = [400, 600, 800, 1080];
 
 const sources = [
   ...(await readdir(path.join(PUBLIC, "assets", "products"))).filter((f) => /\.(jpe?g|png)$/i.test(f)).map((f) => `assets/products/${f}`),

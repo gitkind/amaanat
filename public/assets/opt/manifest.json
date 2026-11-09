@@ -9,9 +9,14 @@
         "bytes": 6114
       },
       {
-        "w": 720,
-        "src": "/assets/opt/boho-charm-necklace-720.webp",
-        "bytes": 15778
+        "w": 600,
+        "src": "/assets/opt/boho-charm-necklace-600.webp",
+        "bytes": 11586
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/boho-charm-necklace-800.webp",
+        "bytes": 19166
       },
       {
         "w": 1080,
@@ -30,9 +35,14 @@
         "bytes": 8018
       },
       {
-        "w": 720,
-        "src": "/assets/opt/cherry-charm-necklace-720.webp",
-        "bytes": 19598
+        "w": 600,
+        "src": "/assets/opt/cherry-charm-necklace-600.webp",
+        "bytes": 14630
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/cherry-charm-necklace-800.webp",
+        "bytes": 23064
       },
       {
         "w": 1080,
@@ -51,9 +61,14 @@
         "bytes": 17704
       },
       {
-        "w": 720,
-        "src": "/assets/opt/daisy-bloom-set-720.webp",
-        "bytes": 47644
+        "w": 600,
+        "src": "/assets/opt/daisy-bloom-set-600.webp",
+        "bytes": 36710
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/daisy-bloom-set-800.webp",
+        "bytes": 54672
       },
       {
         "w": 1080,
@@ -72,9 +87,14 @@
         "bytes": 29006
       },
       {
-        "w": 720,
-        "src": "/assets/opt/marquise-clover-pendant-720.webp",
-        "bytes": 86006
+        "w": 600,
+        "src": "/assets/opt/marquise-clover-pendant-600.webp",
+        "bytes": 65458
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/marquise-clover-pendant-800.webp",
+        "bytes": 99810
       },
       {
         "w": 1080,
@@ -93,9 +113,14 @@
         "bytes": 12540
       },
       {
-        "w": 720,
-        "src": "/assets/opt/petal-leaf-anklet-720.webp",
-        "bytes": 40898
+        "w": 600,
+        "src": "/assets/opt/petal-leaf-anklet-600.webp",
+        "bytes": 29268
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/petal-leaf-anklet-800.webp",
+        "bytes": 49310
       },
       {
         "w": 1080,
@@ -114,9 +139,14 @@
         "bytes": 14880
       },
       {
-        "w": 720,
-        "src": "/assets/opt/starflower-pendant-720.webp",
-        "bytes": 33524
+        "w": 600,
+        "src": "/assets/opt/starflower-pendant-600.webp",
+        "bytes": 26826
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/starflower-pendant-800.webp",
+        "bytes": 37998
       },
       {
         "w": 1080,
@@ -135,9 +165,14 @@
         "bytes": 24522
       },
       {
-        "w": 720,
-        "src": "/assets/opt/vintage-clover-pendant-720.webp",
-        "bytes": 67012
+        "w": 600,
+        "src": "/assets/opt/vintage-clover-pendant-600.webp",
+        "bytes": 50946
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/vintage-clover-pendant-800.webp",
+        "bytes": 76356
       },
       {
         "w": 1080,
@@ -156,9 +191,14 @@
         "bytes": 11862
       },
       {
-        "w": 720,
-        "src": "/assets/opt/post-720.webp",
-        "bytes": 25348
+        "w": 600,
+        "src": "/assets/opt/post-600.webp",
+        "bytes": 20134
+      },
+      {
+        "w": 800,
+        "src": "/assets/opt/post-800.webp",
+        "bytes": 28880
       },
       {
         "w": 1080,
