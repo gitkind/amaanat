@@ -1,6 +1,13 @@
 -- ============================================================
--- AMAANAT — Supabase PostgreSQL Migration
+-- AMAANAT — 001 base schema (Supabase PostgreSQL)
+--
+-- Run first, once, in the Supabase SQL Editor. Then run 002, 003, 004.
+-- Contains no SECURITY DEFINER functions and no publicly executable
+-- function that can change stock or orders: all store logic lives in
+-- 002+ and is executable by service_role only.
 -- ============================================================
+
+BEGIN;
 
 -- =========================
 -- TABLES
@@ -136,12 +143,19 @@ CREATE INDEX IF NOT EXISTS idx_products_category        ON products(category);
 
 -- auto-update updated_at on row changes
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
+-- Trigger functions need no EXECUTE grant to fire; keep them uncallable by browser roles.
+REVOKE ALL ON FUNCTION trigger_set_updated_at() FROM PUBLIC;
+REVOKE ALL ON FUNCTION trigger_set_updated_at() FROM anon, authenticated;
 
 CREATE OR REPLACE TRIGGER set_products_updated_at
   BEFORE UPDATE ON products
@@ -151,367 +165,10 @@ CREATE OR REPLACE TRIGGER set_orders_updated_at
   BEFORE UPDATE ON orders
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
--- ---------------------------------------------------------
--- create_checkout_order(payload JSONB) → JSONB
--- ---------------------------------------------------------
-CREATE OR REPLACE FUNCTION create_checkout_order(payload JSONB)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_client_token  TEXT;
-  v_customer_id   UUID;
-  v_order_id      UUID;
-  v_public_ref    TEXT;
-  v_subtotal      INTEGER := 0;
-  v_shipping      INTEGER;
-  v_tax           INTEGER := 0;
-  v_tax_rate_bps  INTEGER;
-  v_tax_confirmed BOOLEAN;
-  v_total         INTEGER;
-  v_line          JSONB;
-  v_product       RECORD;
-  v_settings      RECORD;
-  v_existing      RECORD;
-  v_rzp_order_id  TEXT;
-BEGIN
-  v_client_token := payload->>'clientToken';
-
-  -- Idempotency: return existing pending order with same client_token
-  SELECT id, public_ref, total_paise, razorpay_order_id
-    INTO v_existing
-    FROM orders
-   WHERE client_token = v_client_token
-     AND payment_status = 'pending'
-   LIMIT 1;
-
-  IF v_existing.id IS NOT NULL THEN
-    RETURN jsonb_build_object(
-      'order_id',          v_existing.id,
-      'public_ref',        v_existing.public_ref,
-      'total_paise',       v_existing.total_paise,
-      'razorpay_order_id', v_existing.razorpay_order_id
-    );
-  END IF;
-
-  -- Load site settings
-  SELECT * INTO v_settings FROM site_settings WHERE id = 1;
-
-  IF v_settings IS NULL OR v_settings.shipping_confirmed IS NOT TRUE
-     OR v_settings.shipping_paise IS NULL OR v_settings.shipping_paise < 0 THEN
-    RAISE EXCEPTION 'shipping_unconfigured';
-  END IF;
-
-  v_shipping      := v_settings.shipping_paise;
-  v_tax_confirmed := v_settings.tax_confirmed;
-  v_tax_rate_bps  := v_settings.tax_rate_bps;
-
-  IF v_tax_confirmed IS TRUE THEN
-    IF v_tax_rate_bps IS NULL OR v_tax_rate_bps < 0 OR v_tax_rate_bps > 10000 THEN
-      RAISE EXCEPTION 'tax_misconfigured';
-    END IF;
-  END IF;
-
-  -- Find or create customer
-  INSERT INTO customers (full_name, email, phone)
-  VALUES (
-    payload->>'fullName',
-    lower(payload->>'email'),
-    payload->>'phone'
-  )
-  ON CONFLICT (email, phone) DO UPDATE SET full_name = EXCLUDED.full_name
-  RETURNING id INTO v_customer_id;
-
-  -- Create the order
-  INSERT INTO orders (
-    customer_id, email, full_name, phone,
-    address_line, address_apartment, address_locality,
-    address_city, address_state, address_pin,
-    notes, client_token
-  ) VALUES (
-    v_customer_id,
-    lower(payload->>'email'),
-    payload->>'fullName',
-    payload->>'phone',
-    payload->'address'->>'line',
-    payload->'address'->>'apartment',
-    payload->'address'->>'locality',
-    payload->'address'->>'city',
-    payload->'address'->>'state',
-    payload->'address'->>'pin',
-    payload->>'notes',
-    v_client_token
-  )
-  RETURNING id, public_ref INTO v_order_id, v_public_ref;
-
-  -- Process each line item
-  FOR v_line IN SELECT * FROM jsonb_array_elements(payload->'lines')
-  LOOP
-    -- Lock the product row to prevent race conditions
-    SELECT * INTO v_product
-      FROM products
-     WHERE id = v_line->>'productId'
-       FOR UPDATE;
-
-    IF v_product IS NULL THEN
-      RAISE EXCEPTION 'unknown_product';
-    END IF;
-
-    IF v_product.active IS NOT TRUE THEN
-      RAISE EXCEPTION 'inactive_product';
-    END IF;
-
-    IF v_product.inventory_confirmed IS NOT TRUE THEN
-      RAISE EXCEPTION 'inventory_unconfirmed';
-    END IF;
-
-    IF v_product.stock_quantity IS NULL
-       OR v_product.stock_quantity < (v_line->>'quantity')::INTEGER THEN
-      RAISE EXCEPTION 'insufficient_stock';
-    END IF;
-
-    IF (v_line->>'quantity')::INTEGER < 1 THEN
-      RAISE EXCEPTION 'invalid_quantity';
-    END IF;
-
-    -- Create order item
-    INSERT INTO order_items (order_id, product_id, name, quantity, unit_price_paise, line_total_paise)
-    VALUES (
-      v_order_id,
-      v_product.id,
-      v_product.name,
-      (v_line->>'quantity')::INTEGER,
-      v_product.price_paise,
-      v_product.price_paise * (v_line->>'quantity')::INTEGER
-    );
-
-    v_subtotal := v_subtotal + (v_product.price_paise * (v_line->>'quantity')::INTEGER);
-
-    -- Reserve stock
-    UPDATE products
-       SET stock_quantity = stock_quantity - (v_line->>'quantity')::INTEGER
-     WHERE id = v_product.id;
-
-    -- Record inventory movement
-    INSERT INTO inventory_movements (product_id, previous_quantity, new_quantity, delta, reason, order_id)
-    VALUES (
-      v_product.id,
-      v_product.stock_quantity,
-      v_product.stock_quantity - (v_line->>'quantity')::INTEGER,
-      -(v_line->>'quantity')::INTEGER,
-      'Reserved for order ' || v_public_ref,
-      v_order_id
-    );
-  END LOOP;
-
-  -- Calculate tax
-  IF v_tax_confirmed IS TRUE AND v_tax_rate_bps > 0 THEN
-    v_tax := round((v_subtotal::NUMERIC * v_tax_rate_bps) / 10000);
-  END IF;
-
-  v_total := v_subtotal + v_shipping + v_tax;
-
-  -- Update order totals
-  UPDATE orders
-     SET subtotal_paise = v_subtotal,
-         shipping_paise = v_shipping,
-         tax_paise      = v_tax,
-         total_paise    = v_total
-   WHERE id = v_order_id;
-
-  RETURN jsonb_build_object(
-    'order_id',          v_order_id,
-    'public_ref',        v_public_ref,
-    'total_paise',       v_total,
-    'razorpay_order_id', NULL
-  );
-END;
-$$;
-
--- ---------------------------------------------------------
--- finalize_paid_order(…) → JSONB
--- ---------------------------------------------------------
-CREATE OR REPLACE FUNCTION finalize_paid_order(
-  p_order_id            UUID,
-  p_razorpay_order_id   TEXT,
-  p_razorpay_payment_id TEXT,
-  p_signature           TEXT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_order RECORD;
-BEGIN
-  SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
-
-  IF v_order IS NULL THEN
-    RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- Already paid — return existing (idempotent)
-  IF v_order.payment_status = 'paid' THEN
-    RETURN jsonb_build_object(
-      'order_id',         v_order.id,
-      'public_ref',       v_order.public_ref,
-      'email',            v_order.email,
-      'payment_status',   v_order.payment_status,
-      'fulfilment_status', v_order.fulfilment_status
-    );
-  END IF;
-
-  UPDATE orders
-     SET payment_status      = 'paid',
-         fulfilment_status   = 'confirmed',
-         razorpay_order_id   = p_razorpay_order_id,
-         razorpay_payment_id = p_razorpay_payment_id,
-         razorpay_signature  = p_signature
-   WHERE id = p_order_id;
-
-  -- Record payment transaction
-  INSERT INTO payment_transactions (order_id, razorpay_order_id, razorpay_payment_id, status, amount_paise)
-  VALUES (p_order_id, p_razorpay_order_id, p_razorpay_payment_id, 'paid', v_order.total_paise);
-
-  RETURN jsonb_build_object(
-    'order_id',         v_order.id,
-    'public_ref',       v_order.public_ref,
-    'email',            v_order.email,
-    'payment_status',   'paid',
-    'fulfilment_status', 'confirmed'
-  );
-END;
-$$;
-
--- ---------------------------------------------------------
--- release_checkout_order(…) → JSONB
--- ---------------------------------------------------------
-CREATE OR REPLACE FUNCTION release_checkout_order(
-  p_order_id       UUID,
-  p_payment_status TEXT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_order RECORD;
-  v_item  RECORD;
-  v_product RECORD;
-BEGIN
-  SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
-
-  IF v_order IS NULL THEN
-    RAISE EXCEPTION 'Order not found';
-  END IF;
-
-  -- Only release if currently pending
-  IF v_order.payment_status <> 'pending' THEN
-    RETURN jsonb_build_object(
-      'order_id',       v_order.id,
-      'public_ref',     v_order.public_ref,
-      'payment_status', v_order.payment_status
-    );
-  END IF;
-
-  -- Restore stock for each item
-  FOR v_item IN SELECT * FROM order_items WHERE order_id = p_order_id
-  LOOP
-    SELECT * INTO v_product FROM products WHERE id = v_item.product_id FOR UPDATE;
-
-    IF v_product IS NOT NULL THEN
-      UPDATE products
-         SET stock_quantity = COALESCE(stock_quantity, 0) + v_item.quantity
-       WHERE id = v_item.product_id;
-
-      INSERT INTO inventory_movements (product_id, previous_quantity, new_quantity, delta, reason, order_id)
-      VALUES (
-        v_item.product_id,
-        v_product.stock_quantity,
-        COALESCE(v_product.stock_quantity, 0) + v_item.quantity,
-        v_item.quantity,
-        'Released from ' || p_payment_status || ' order ' || v_order.public_ref,
-        p_order_id
-      );
-    END IF;
-  END LOOP;
-
-  UPDATE orders
-     SET payment_status = p_payment_status
-   WHERE id = p_order_id;
-
-  RETURN jsonb_build_object(
-    'order_id',       v_order.id,
-    'public_ref',     v_order.public_ref,
-    'payment_status', p_payment_status
-  );
-END;
-$$;
-
--- ---------------------------------------------------------
--- set_product_stock(…) → JSONB
--- ---------------------------------------------------------
-CREATE OR REPLACE FUNCTION set_product_stock(
-  p_product_id TEXT,
-  p_quantity   INTEGER,
-  p_note       TEXT DEFAULT ''
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_product RECORD;
-  v_prev    INTEGER;
-BEGIN
-  SELECT * INTO v_product FROM products WHERE id = p_product_id FOR UPDATE;
-
-  IF v_product IS NULL THEN
-    RAISE EXCEPTION 'Product not found';
-  END IF;
-
-  v_prev := v_product.stock_quantity;
-
-  UPDATE products
-     SET stock_quantity      = p_quantity,
-         inventory_confirmed = true
-   WHERE id = p_product_id;
-
-  INSERT INTO inventory_movements (product_id, previous_quantity, new_quantity, delta, reason)
-  VALUES (
-    p_product_id,
-    v_prev,
-    p_quantity,
-    p_quantity - COALESCE(v_prev, 0),
-    COALESCE(NULLIF(p_note, ''), 'Stock set via admin')
-  );
-
-  SELECT to_jsonb(p.*) INTO v_product FROM products p WHERE id = p_product_id;
-
-  RETURN v_product::JSONB;
-END;
-$$;
-
--- ---------------------------------------------------------
--- record_payment_event(…) → VOID
--- ---------------------------------------------------------
-CREATE OR REPLACE FUNCTION record_payment_event(
-  p_order_id            UUID,
-  p_razorpay_order_id   TEXT,
-  p_razorpay_payment_id TEXT,
-  p_status              TEXT,
-  p_amount_paise        INTEGER
-)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  INSERT INTO payment_transactions (order_id, razorpay_order_id, razorpay_payment_id, status, amount_paise)
-  VALUES (p_order_id, p_razorpay_order_id, p_razorpay_payment_id, p_status, p_amount_paise);
-END;
-$$;
+-- Checkout, payment, release and stock functions are defined in
+-- 002_ecommerce_core.sql / 003_admin.sql (SECURITY INVOKER, pinned search_path,
+-- EXECUTE granted to service_role only). The earlier SECURITY DEFINER versions
+-- that lived here were publicly executable and have been removed.
 
 -- =========================
 -- ROW LEVEL SECURITY
@@ -526,7 +183,8 @@ ALTER TABLE inventory_movements  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_settings        ENABLE ROW LEVEL SECURITY;
 
--- Public/anon: read active products only
+-- Public/anon: read active products only (public catalogue)
+DROP POLICY IF EXISTS products_anon_select ON products;
 CREATE POLICY products_anon_select ON products
   FOR SELECT TO anon
   USING (active = true);
@@ -595,3 +253,5 @@ VALUES
    NULL, false, true, false,
    '2026-11-08T08:07:00.000Z', '2026-11-08T08:07:00.000Z')
 ON CONFLICT (id) DO NOTHING;
+
+COMMIT;

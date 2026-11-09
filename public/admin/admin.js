@@ -148,7 +148,7 @@
   async function overview() {
     const o = await api('GET', '/api/admin/overview');
     const setup = [];
-    if (!o.setup.payments) setup.push('Razorpay keys are not configured — customers cannot pay yet.');
+    if (!o.setup.payments && !o.setup.codEnabled) setup.push('No payment method is on — turn on Cash on Delivery in Settings (or add Razorpay keys) before customers can order.');
     if (!o.setup.shippingConfirmed) setup.push('Shipping charge is not confirmed — checkout stays closed. Set it in Settings.');
     if (o.products.stockUnconfirmed) setup.push(`${o.products.stockUnconfirmed} active product(s) have unconfirmed stock and can't be bought. Count them in Inventory.`);
     if (!o.setup.storage) setup.push('Image storage is not configured — uploads are disabled.');
@@ -160,7 +160,8 @@
         <div class="kpi"><b>${inr(o.revenue.netPaise)}</b><span>Net paid revenue (verified payments − refunds)</span></div>
         <div class="kpi"><b>${o.orders.paid}</b><span>Paid orders</span></div>
         <div class="kpi"><b>${o.orders.toFulfil}</b><span>To fulfil</span></div>
-        <div class="kpi"><b>${o.orders.awaitingPayment}</b><span>Awaiting payment</span></div>
+        <div class="kpi"><b>${o.orders.awaitingPayment}</b><span>Awaiting online payment</span></div>
+        <div class="kpi"><b>${o.orders.codToCollect}</b><span>Cash on delivery to collect</span></div>
         <div class="kpi"><b>${o.orders.total}</b><span>All orders</span></div>
         <div class="kpi"><b>${o.products.active}</b><span>Active products (${o.products.archived} archived)</span></div>
       </div>
@@ -191,7 +192,8 @@
       <form class="card row" id="filters" role="search">
         <div class="field"><label for="f-q">Search</label><input id="f-q" name="q" value="${esc(q.get('q') || '')}" placeholder="Reference, name, email or phone" /></div>
         <div class="field"><label for="f-p">Payment</label><select id="f-p" name="payment">${opt(['', 'pending', 'authorized', 'paid', 'partially_refunded', 'refunded', 'cancelled', 'expired', 'failed'], q.get('payment') || '')}</select></div>
-        <div class="field"><label for="f-f">Fulfilment</label><select id="f-f" name="fulfilment">${opt(['', 'confirmed', 'processing', 'shipped', 'delivered', 'on_hold', 'cancelled', 'refunded'], q.get('fulfilment') || '')}</select></div>
+        <div class="field"><label for="f-f">Fulfilment</label><select id="f-f" name="fulfilment">${opt(['', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'on_hold', 'cancelled', 'refunded'], q.get('fulfilment') || '')}</select></div>
+        <div class="field"><label for="f-m">Method</label><select id="f-m" name="method">${['', 'cod', 'razorpay'].map((v) => `<option value="${v}" ${v === (q.get('method') || '') ? 'selected' : ''}>${v === 'cod' ? 'Cash on delivery' : v === 'razorpay' ? 'Online (Razorpay)' : 'Any'}</option>`).join('')}</select></div>
         <label class="check"><input type="checkbox" name="review" value="1" ${q.get('review') === '1' ? 'checked' : ''}/> Needs review</label>
         <button class="btn primary" type="submit">Filter</button>
       </form>
@@ -199,7 +201,7 @@
         ${r.orders.map((o) => `<tr class="clickable" data-href="#/orders/${esc(o.id)}">
           <td data-label="Order"><a href="#/orders/${esc(o.id)}">${esc(o.publicRef)}</a> ${o.needsReview ? '<span class="badge bad">review</span>' : ''}<br><small>${date(o.createdAt)}</small></td>
           <td data-label="Customer">${esc(o.customer)}<br><small>${esc(o.email)}</small></td>
-          <td data-label="Items">${o.itemCount}</td><td data-label="Payment">${badge(o.paymentStatus)}</td>
+          <td data-label="Items">${o.itemCount}</td><td data-label="Payment">${o.paymentMethod === 'cod' ? '<span class="badge">COD</span> ' : ''}${badge(o.paymentStatus)}</td>
           <td data-label="Fulfilment">${badge(o.fulfilmentStatus)}</td><td class="num" data-label="Total">${inr(o.totalPaise)}</td></tr>`).join('')}
       </tbody></table></div>
       <div class="pager">${offset > 0 ? '<button class="btn small" id="prev" type="button">← Newer</button>' : ''}${offset + limit < r.total ? '<button class="btn small" id="next" type="button">Older →</button>' : ''}</div>`
@@ -216,7 +218,10 @@
   async function orderDetail(id) {
     const { order: o } = await api('GET', `/api/admin/orders/${id}`);
     const paid = ['paid', 'partially_refunded'].includes(o.paymentStatus);
-    const next = paid ? NEXT_FULFILMENT[o.fulfilmentStatus] || [] : [];
+    const cod = o.paymentMethod === 'cod';
+    const codOpen = cod && o.paymentStatus === 'pending';
+    const shippedOut = ['shipped', 'delivered'].includes(o.fulfilmentStatus);
+    const next = paid || codOpen ? NEXT_FULFILMENT[o.fulfilmentStatus] || [] : [];
     const refundable = o.totalPaise - o.refunds.filter((r) => ['pending', 'processed', 'creating'].includes(r.status)).reduce((s, r) => s + r.amountPaise, 0);
     const a = o.address || {};
     view.innerHTML = `
@@ -225,15 +230,19 @@
         <form class="row" id="resolve" style="margin-top:.5rem"><div class="field"><label for="r-note">Resolution note</label><input id="r-note" name="note" required minlength="3" maxlength="300" /></div><button class="btn" type="submit">Mark resolved</button></form></div>` : ''}
       <div class="grid two">
         <section class="card"><h2>Status</h2>
-          <dl class="kv"><dt>Payment</dt><dd>${badge(o.paymentStatus)}</dd><dt>Fulfilment</dt><dd>${badge(o.fulfilmentStatus)}</dd>
+          <dl class="kv"><dt>Method</dt><dd>${cod ? 'Cash on delivery' : 'Online (Razorpay)'}</dd><dt>Payment</dt><dd>${badge(o.paymentStatus)}</dd><dt>Fulfilment</dt><dd>${badge(o.fulfilmentStatus)}</dd>
           <dt>Placed</dt><dd>${date(o.createdAt)}</dd><dt>Paid</dt><dd>${date(o.paidAt)}</dd>
           <dt>Total</dt><dd>${inr(o.totalPaise)}</dd><dt>Refunded</dt><dd>${inr(o.refundedPaise)}</dd>
-          <dt>Razorpay order</dt><dd>${esc(o.razorpayOrderId || '—')}</dd><dt>Razorpay payment</dt><dd>${esc(o.razorpayPaymentId || '—')}</dd></dl>
+          ${cod ? '' : `<dt>Razorpay order</dt><dd>${esc(o.razorpayOrderId || '—')}</dd><dt>Razorpay payment</dt><dd>${esc(o.razorpayPaymentId || '—')}</dd>`}</dl>
           <div class="actions" style="margin-top:1rem">
-            ${['pending', 'authorized'].includes(o.paymentStatus) ? '<button class="btn" id="reconcile" type="button">Check payment with Razorpay</button>' : ''}
-            ${o.paymentStatus === 'pending' ? '<button class="btn danger" id="cancel" type="button">Cancel unpaid order</button>' : ''}
+            ${!cod && ['pending', 'authorized'].includes(o.paymentStatus) ? '<button class="btn" id="reconcile" type="button">Check payment with Razorpay</button>' : ''}
+            ${o.paymentStatus === 'pending' && !(cod && shippedOut) ? `<button class="btn danger" id="cancel" type="button">${cod ? 'Cancel order' : 'Cancel unpaid order'}</button>` : ''}
           </div>
-          <p class="hint">Payment status only changes from verified Razorpay evidence (checkout signature, webhook or this check).</p>
+          ${codOpen && o.fulfilmentStatus === 'delivered' && isOwner() ? `<form class="row" id="codpaid" style="margin-top:1rem">
+            <div class="field"><label for="cod-note">Cash received — note (e.g. courier remittance ref)</label><input id="cod-note" name="note" required minlength="3" maxlength="300" /></div>
+            <button class="btn primary" type="submit">Record ${inr(o.totalPaise)} received</button></form>` : ''}
+          <p class="hint">${cod ? 'Cash on delivery: confirm, pack and ship the order, then record the cash once it is collected. Orders can be cancelled (stock returned) only before shipping.'
+            : 'Payment status only changes from verified Razorpay evidence (checkout signature, webhook or this check).'}</p>
         </section>
         <section class="card"><h2>Customer &amp; delivery</h2>
           <dl class="kv"><dt>Name</dt><dd>${esc(o.customer?.fullName)}</dd><dt>Email</dt><dd>${esc(o.customer?.email)}</dd><dt>Phone</dt><dd>${esc(o.customer?.phone)}</dd>
@@ -254,7 +263,7 @@
             <div class="field"><label for="tu">Tracking link (https)</label><input id="tu" name="trackingUrl" type="url" maxlength="500" value="${esc(o.tracking?.url || '')}" /></div>
             <div class="field"><label for="tnote">Internal note (optional)</label><input id="tnote" name="note" maxlength="300" /></div>
             <button class="btn primary" type="submit">Save fulfilment</button></form>`
-            : `<p class="hint">${paid ? 'No further fulfilment steps.' : 'Fulfilment opens once the payment is verified.'}</p>`}
+            : `<p class="hint">${paid || codOpen ? 'No further fulfilment steps.' : 'Fulfilment opens once the payment is verified.'}</p>`}
         </section>
         <section class="card"><h2>Refunds</h2>
           ${o.refunds.length ? `<ul>${o.refunds.map((r) => `<li>${inr(r.amountPaise)} ${badge(r.status)} — ${esc(r.reason || '')} <small>${esc(r.by || 'Razorpay')} · ${date(r.createdAt)}${r.error ? ` · ${esc(r.error)}` : ''}</small></li>`).join('')}</ul>` : '<p class="hint">No refunds.</p>'}
@@ -277,8 +286,13 @@
       try { const r = await api('POST', `/api/admin/orders/${id}/reconcile`, {}); toast(`Razorpay says: ${r.result}`, r.result === 'paid' ? 'ok' : ''); reload(); } catch (err) { toast(err.message, 'bad'); }
     }));
     $('#cancel')?.addEventListener('click', (e) => {
-      if (!confirm('Cancel this unpaid order and return its items to stock? Razorpay is checked first.')) return;
+      if (!confirm(cod ? 'Cancel this Cash on Delivery order and return its items to stock?' : 'Cancel this unpaid order and return its items to stock? Razorpay is checked first.')) return;
       withButton(e.target, async () => { try { await api('POST', `/api/admin/orders/${id}/cancel`, {}); toast('Order cancelled', 'ok'); reload(); } catch (err) { toast(err.message, 'bad'); } });
+    });
+    $('#codpaid')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!confirm(`Record ${inr(o.totalPaise)} as received in cash for ${o.publicRef}? This marks the order paid.`)) return;
+      try { await api('POST', `/api/admin/orders/${id}/cod-collected`, { note: e.target.note.value }); toast('Cash recorded', 'ok'); reload(); } catch (err) { formErrors(e.target, err); }
     });
     $('#resolve')?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -540,6 +554,7 @@
           <p class="hint">Checkout stays closed until shipping is confirmed. Enter 0 for free shipping. Only enable tax if it applies to your business.</p>
           <div class="row">${input('shipping', 'Shipping charge per order (₹)', toRupees(s.shippingPaise), 'inputmode="decimal"')}
             <label class="check"><input type="checkbox" name="shippingConfirmed" ${s.shippingConfirmed ? 'checked' : ''} ${dis}/> Shipping confirmed</label></div>
+          <label class="check"><input type="checkbox" name="codEnabled" ${s.codEnabled ? 'checked' : ''} ${dis}/> Offer Cash on Delivery at checkout</label>
           <div class="row">${input('taxPercent', 'Tax rate (%)', s.taxRateBps == null ? '' : s.taxRateBps / 100, 'inputmode="decimal"')}
             <label class="check"><input type="checkbox" name="taxConfirmed" ${s.taxConfirmed ? 'checked' : ''} ${dis}/> Charge tax</label></div>
           ${input('lowStockThreshold', 'Low-stock alert at or below (pieces, blank = off)', s.lowStockThreshold, 'type="number" min="0" max="1000"')}
@@ -581,7 +596,7 @@
         taxRateBps = tp ? Math.round(Number(tp) * 100) : null;
       } catch (err) { toast(err.message, 'bad'); return; }
       const body = {
-        shippingPaise, shippingConfirmed: f.shippingConfirmed.checked, taxRateBps, taxConfirmed: f.taxConfirmed.checked,
+        shippingPaise, shippingConfirmed: f.shippingConfirmed.checked, codEnabled: f.codEnabled.checked, taxRateBps, taxConfirmed: f.taxConfirmed.checked,
         lowStockThreshold: f.lowStockThreshold.value === '' ? null : Number(f.lowStockThreshold.value),
         storeName: f.storeName.value, contactEmail: f.contactEmail.value, contactPhone: f.contactPhone.value, whatsappE164: f.whatsappE164.value,
         businessAddress: f.businessAddress.value, instagramUrl: f.instagramUrl.value, facebookUrl: f.facebookUrl.value, youtubeUrl: f.youtubeUrl.value,

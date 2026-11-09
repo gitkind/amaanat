@@ -84,7 +84,8 @@ export async function startTestServer({ payments = true, webhook = true } = {}) 
     RESERVATION_MINUTES: "30",
   });
   const db = await createPgliteDb();
-  const auth = createLocalAuth({ pg: db.pg, secret: "test-local-auth-secret" });
+  const emails = []; // password-reset emails "sent" by the local auth provider
+  const auth = createLocalAuth({ pg: db.pg, secret: "test-local-auth-secret", onEmail: (m) => emails.push(m) });
   const razorpay = payments ? createFakeRazorpay() : null;
   const silent = { log() {}, info() {}, warn() {}, error() {} };
   const uploadDir = await mkdtemp(path.join(os.tmpdir(), "amaanat-uploads-"));
@@ -95,7 +96,7 @@ export async function startTestServer({ payments = true, webhook = true } = {}) 
   const base = `http://127.0.0.1:${server.address().port}`;
 
   return {
-    base, db, razorpay, app,
+    base, db, razorpay, app, emails,
     uploadDir,
     async close() {
       await new Promise((r) => server.close(r));

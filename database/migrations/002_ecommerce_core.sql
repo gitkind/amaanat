@@ -173,8 +173,11 @@ DROP POLICY IF EXISTS addresses_own_select ON addresses;
 CREATE POLICY addresses_own_select ON addresses      FOR SELECT TO authenticated USING (user_id = auth.uid());
 DROP POLICY IF EXISTS wishlist_own_select  ON wishlist_items;
 CREATE POLICY wishlist_own_select  ON wishlist_items FOR SELECT TO authenticated USING (user_id = auth.uid());
+-- orders_own_select was removed: the backend reads orders only through
+-- service_role RPC functions, and a direct-read policy would expose internal
+-- columns (client_token hash, razorpay_signature, review notes) to the customer.
+-- The DROP keeps re-runs and databases that already have the policy consistent.
 DROP POLICY IF EXISTS orders_own_select    ON orders;
-CREATE POLICY orders_own_select    ON orders         FOR SELECT TO authenticated USING (user_id = auth.uid());
 
 -- ---------------------------------------------------------------
 -- 7. Helpers
@@ -765,6 +768,11 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   version    TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Migration bookkeeping is server-only: RLS on (no policies) and no browser grants.
+ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON schema_migrations FROM PUBLIC;
+REVOKE ALL ON schema_migrations FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON schema_migrations TO service_role;
 INSERT INTO schema_migrations (version) VALUES ('002_ecommerce_core') ON CONFLICT DO NOTHING;
 
 COMMIT;

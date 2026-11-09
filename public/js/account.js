@@ -30,6 +30,7 @@
           <h2>Sign in</h2>
           ${field('email', 'Email', '', 'type="email" autocomplete="email" required')}
           ${field('password', 'Password', '', 'type="password" autocomplete="current-password" required')}
+          <p style="margin:-.5rem 0 1rem"><a class="text-link" href="/forgot-password">Forgot password?</a></p>
           <p class="form-error" data-msg role="alert"></p>
           <button class="btn btn--block" type="submit">Sign in</button>
         </form>

@@ -8,12 +8,15 @@
   const row = (label, value) => `<div class="kv-row"><span class="label">${label}</span><span>${value}</span></div>`;
 
   function render(o) {
-    const heading = o.paymentStatus === 'paid' ? 'Thank you — your order is confirmed'
-      : o.paymentStatus === 'authorized' ? 'Payment received — confirming'
-        : o.paymentStatus === 'pending' ? 'Waiting for payment confirmation' : 'Your order';
-    const sub = o.paymentStatus === 'paid' ? 'Your payment was verified. Keep your order reference to track this order.'
-      : ['pending', 'authorized'].includes(o.paymentStatus) ? 'We are confirming your payment with Razorpay. This page updates automatically.'
-        : 'Keep your order reference to track this order.';
+    const codOpen = o.paymentMethod === 'cod' && o.paymentStatus === 'pending';
+    const heading = codOpen ? 'Thank you — your order is placed'
+      : o.paymentStatus === 'paid' ? 'Thank you — your order is confirmed'
+        : o.paymentStatus === 'authorized' ? 'Payment received — confirming'
+          : o.paymentStatus === 'pending' ? 'Waiting for payment confirmation' : 'Your order';
+    const sub = codOpen ? 'Please keep the exact amount ready — you pay in cash when your order arrives. Keep your order reference to track it.'
+      : o.paymentStatus === 'paid' ? 'Your payment was verified. Keep your order reference to track this order.'
+        : ['pending', 'authorized'].includes(o.paymentStatus) ? 'We are confirming your payment with Razorpay. This page updates automatically.'
+          : 'Keep your order reference to track this order.';
     document.title = `${heading} — Amaanat`;
     root.innerHTML = `
       <header class="page-hero" style="padding-inline:0"><p class="eyebrow">Order ${escapeHtml(o.publicRef)}</p><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(sub)}</p></header>
@@ -47,7 +50,7 @@
     try {
       const { order } = await API.get(`/api/orders/${encodeURIComponent(id)}`, key ? { 'X-Order-Key': key } : {});
       render(order);
-      if ((order.paymentStatus === 'pending' || order.paymentStatus === 'authorized') && tries++ < 20) setTimeout(load, 3000);
+      if (order.paymentMethod !== 'cod' && (order.paymentStatus === 'pending' || order.paymentStatus === 'authorized') && tries++ < 20) setTimeout(load, 3000);
     } catch (e) {
       root.innerHTML = `<div class="empty-state"><h1 style="font-size:var(--step-3)">Order not available here</h1><p>${escapeHtml(e.status === 404 ? 'This order can only be opened from the browser that placed it, or from your account.' : e.message)}</p><a class="btn" href="/track">Track with reference and email</a></div>`;
     }

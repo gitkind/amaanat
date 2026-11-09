@@ -23,8 +23,8 @@ if (process.argv.includes("--test-fixtures")) {
   for (const id of ids) {
     await deps.db.rpc("set_product_stock", { p_product_id: id, p_quantity: 5, p_note: "LOCAL TEST FIXTURE — not real stock" });
   }
-  await deps.db.pg.query("UPDATE site_settings SET shipping_paise = 0, shipping_confirmed = true WHERE id = 1");
-  console.log("  ⚠ Local test fixtures applied: stock=5 per product, shipping=₹0 (local DB only)");
+  await deps.db.pg.query("UPDATE site_settings SET shipping_paise = 0, shipping_confirmed = true, cod_enabled = true WHERE id = 1");
+  console.log("  ⚠ Local test fixtures applied: stock=5 per product, shipping=₹0, COD on (local DB only)");
 }
 
 const adminIdx = process.argv.indexOf("--make-admin");

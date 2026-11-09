@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_entity  ON admin_audit_log(entity_type, ent
 ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Audit rows are append-only, even for the service role.
-CREATE OR REPLACE FUNCTION am_audit_immutable() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION am_audit_immutable() RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 BEGIN RAISE EXCEPTION 'audit_log_is_append_only'; END $$;
 DROP TRIGGER IF EXISTS trg_audit_immutable ON admin_audit_log;
 CREATE TRIGGER trg_audit_immutable BEFORE UPDATE OR DELETE ON admin_audit_log

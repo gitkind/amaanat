@@ -9,6 +9,14 @@
 
 document.documentElement.classList.add('js');
 
+// Password-reset links that land anywhere but /reset-password are forwarded there (token kept intact).
+(() => {
+  const h = location.hash;
+  const q = new URLSearchParams(location.search);
+  const recovery = /(^|[#&])type=recovery(&|$)/.test(h) || /(^|[#&])error_code=/.test(h) || (q.get('type') === 'recovery' && q.get('token_hash'));
+  if (recovery && location.pathname !== '/reset-password') location.replace(`/reset-password${location.search}${h}`);
+})();
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

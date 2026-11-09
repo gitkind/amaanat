@@ -50,16 +50,33 @@
   }
   renderSummary(cart);
 
+  // Payment methods offered by the server (COD and/or Razorpay).
+  const methods = settings?.checkout?.methods || { razorpay: true, cod: false };
+  const methodBox = document.getElementById('pay-methods');
+  const payMode = document.getElementById('pay-mode');
+  const selectedMethod = () => form.querySelector('input[name="paymentMethod"]:checked')?.value || null;
+  const payLabel = () => (selectedMethod() === 'cod' ? 'Place order — pay on delivery' : 'Pay securely');
+  const available = ['cod', 'razorpay'].filter((m) => methods[m]);
+  available.forEach((m) => { methodBox.querySelector(`[data-method="${m}"]`).hidden = false; });
+  if (available.length) {
+    methodBox.hidden = false;
+    form.querySelector(`input[name="paymentMethod"][value="${available[0]}"]`).checked = true;
+  }
+  const paintMethod = () => {
+    payBtn.textContent = payLabel();
+    payMode.textContent = selectedMethod() === 'razorpay' && settings?.checkout?.razorpayMode === 'test'
+      ? 'Razorpay TEST mode: no real money moves. Use Razorpay test cards or test UPI.' : '';
+  };
+  methodBox.addEventListener('change', paintMethod);
+  paintMethod();
+
   const blockers = settings?.checkout?.blockers || [];
   if (blockers.length || !cart.quote.ok) {
     const msgs = blockers.map((b) => b.message);
     if (!cart.quote.ok) msgs.unshift(cart.quote.message);
-    noticeEl.innerHTML = `<div class="notice" role="status"><strong>Payment can't open yet.</strong><ul>${[...new Set(msgs)].map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul></div>`;
+    noticeEl.innerHTML = `<div class="notice" role="status"><strong>Checkout can't open yet.</strong><ul>${[...new Set(msgs)].map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul></div>`;
   } else {
     payBtn.disabled = false;
-  }
-  if (settings?.checkout?.razorpayMode === 'test') {
-    document.getElementById('pay-mode').textContent = 'Razorpay TEST mode: no real money moves. Use Razorpay test cards or test UPI.';
   }
 
   // Prefill from the account.
@@ -112,16 +129,19 @@
     Forms.clear(form);
     busy = true;
     payBtn.disabled = true;
-    payBtn.textContent = 'Reserving your pieces…';
+    const paymentMethod = selectedMethod();
+    payBtn.textContent = paymentMethod === 'cod' ? 'Placing your order…' : 'Reserving your pieces…';
     const key = checkoutKey();
     const customer = Forms.data(form);
+    delete customer.paymentMethod;
     try {
       const res = await API.post('/api/checkout', {
         checkoutKey: key,
         customer,
+        paymentMethod,
         saveAddress: document.getElementById('saveAddress').checked,
       });
-      if (res.status === 'paid') return goToOrder(res.order, key);
+      if (res.status === 'paid' || res.status === 'placed') return goToOrder(res.order, key);
       await loadRazorpay();
       const r = res.razorpay;
       const rzp = new window.Razorpay({
@@ -161,7 +181,7 @@
             }
             busy = false;
             payBtn.disabled = false;
-            payBtn.textContent = 'Pay securely';
+            payBtn.textContent = payLabel();
           },
         },
       });
@@ -173,7 +193,7 @@
     } catch (err) {
       busy = false;
       payBtn.disabled = false;
-      payBtn.textContent = 'Pay securely';
+      payBtn.textContent = payLabel();
       if (err.body?.errors) Forms.errors(form, err.body.errors);
       if (err.code === 'order_not_payable') resetKey();
       notice(noticeEl, err.message, 'error');

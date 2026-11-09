@@ -39,6 +39,8 @@ There are no demo or shared admin accounts.
 | `002_ecommerce_core.sql` | Hardened checkout and payments, carts, accounts. Before running it on a DB that has orders, check for duplicate `client_token` / `razorpay_order_id` (see below). |
 | `003_admin.sql` | Admin roles, audit log, product options (variants), refunds, settings, policy pages. |
 | `004_newsletter.sql` | Newsletter sign-ups. |
+| `005_service_role_grants.sql` | Table access for the server's `service_role` (needed on projects without default grants). |
+| `006_cod.sql` | Cash on Delivery: `orders.payment_method`, the `cod_enabled` switch (off by default) and COD-aware checkout, fulfilment and admin functions. |
 
 All of them only add things and can be re-run safely. None of them changes prices, stock, settings values or existing orders.
 
@@ -67,6 +69,22 @@ on conflict (user_id) do update set role = 'owner';
 2. Mark it **Public**, so images can be shown on the store.
 
 Uploads go through the server only. The server checks each file's real type (JPEG, PNG or WebP only, max 4 MB).
+
+## 4b. Password reset emails (Supabase Auth → dashboard)
+
+The site sends reset requests to Supabase (`/forgot-password` → Supabase emails a link → `/reset-password`).
+
+1. **Authentication → URL Configuration**
+   - **Site URL**: your live address (e.g. `https://amaanat.in`). While testing locally: `http://localhost:3000`.
+   - **Redirect URLs**: add `http://localhost:3000/reset-password` and `https://<your-domain>/reset-password`.
+   - Set `APP_BASE_URL` in production so the reset link always points at your domain.
+2. **Authentication → Emails → Reset Password template (recommended)**: change the link to
+   `<a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery">Reset your password</a>`
+   so the token is handled by the server and works from any device. The default template also works.
+3. **Authentication → Emails → SMTP Settings**: Supabase's built-in sender only delivers to your project's
+   team members' addresses and is heavily rate-limited. For customers, set up custom SMTP
+   (e.g. Resend, Postmark, Amazon SES, Zoho) before launch.
+4. **Authentication → Rate Limits**: check "emails sent per hour" suits you.
 
 ## 5. Razorpay (TEST mode)
 
@@ -97,6 +115,7 @@ Not verified yet: this config has not been deployed. In particular, check on the
 
 1. **Inventory:** set the counted stock for each piece. Products stay unbuyable until you do.
 2. **Settings → Checkout:** enter the shipping charge (0 for free) and tick "Shipping confirmed". Enable tax only if it applies.
+   To accept **Cash on Delivery**, tick "Offer Cash on Delivery at checkout". COD orders are placed straight away (no Razorpay needed): confirm, pack, ship and mark them delivered in Orders, then use "Record … received" once the cash is collected. They can be cancelled (stock returned) only before shipping.
 3. **Settings → Contact:** add your email, WhatsApp and phone. Add social links if you want them shown.
 4. **Pages:** write and publish your Privacy, Terms, Shipping, Returns and FAQ texts. Until they're published, those pages tell customers they're being prepared and aren't indexed.
 5. **Check the brand claims:** the homepage and About page still carry your original wording ("No tarnish", "No fading", "No skin irritation"). Keep them only if they are true for every piece.
