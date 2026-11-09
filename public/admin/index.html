@@ -4,50 +4,69 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#2b2118" />
     <title>Admin — Amaanat</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/jost.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/admin/admin.css" />
   </head>
   <body>
     <a class="skip" href="#view">Skip to content</a>
     <div class="shell" id="shell" hidden>
       <aside class="side" id="side">
-        <div class="brand"><span class="brand-hi" lang="hi">अमानत</span><span>Admin</span></div>
+        <div class="brand"><span class="brand-hi" lang="hi">अमानत</span><span class="brand-en">Amaanat</span><span class="brand-tag">Atelier admin</span></div>
         <nav aria-label="Admin">
-          <a href="#/overview" data-nav="overview">Overview</a>
-          <a href="#/orders" data-nav="orders">Orders</a>
-          <a href="#/products" data-nav="products">Products</a>
-          <a href="#/inventory" data-nav="inventory">Inventory</a>
-          <a href="#/customers" data-nav="customers">Customers</a>
-          <a href="#/settings" data-nav="settings">Settings</a>
-          <a href="#/pages" data-nav="pages">Pages</a>
-          <a href="#/audit" data-nav="audit" data-owner>Audit log</a>
+          <p class="nav-group">Store</p>
+          <a href="#/overview" data-nav="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4zm10 7h6V4h-6zM4 20h6v-4H4z"/></svg>Overview</a>
+          <a href="#/orders" data-nav="orders"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7zM9 7a3 3 0 0 1 6 0"/></svg>Orders</a>
+          <a href="#/products" data-nav="products"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l3 5 6 1-4.5 4 1 6L12 16l-5.5 3 1-6L3 9l6-1z"/></svg>Products</a>
+          <a href="#/inventory" data-nav="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8"/></svg>Inventory</a>
+          <a href="#/customers" data-nav="customers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></svg>Customers</a>
+          <p class="nav-group">Website</p>
+          <a href="#/website" data-nav="website"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 9h18M7 13h5M7 16h8"/></svg>Website editor</a>
+          <a href="#/pages" data-nav="pages"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg>Policies</a>
+          <p class="nav-group">Business</p>
+          <a href="#/settings" data-nav="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.3-1.3L17 5l-3-1-1 2h-2L10 4 7 5l.3 2L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.3 1.3L7 19l3 1 1-2h2l1 2 3-1-.3-2 1.3-1.3 2 .3 1-3z"/></svg>Settings</a>
+          <a href="#/audit" data-nav="audit" data-owner><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/></svg>Audit log</a>
         </nav>
         <div class="who">
-          <span id="who"></span>
+          <span class="who-name" id="who"></span>
           <a href="/" target="_blank" rel="noopener">View store ↗</a>
           <button type="button" class="link" id="logout">Sign out</button>
         </div>
       </aside>
+      <div class="scrim" id="scrim" hidden></div>
       <header class="top">
-        <button type="button" class="btn small menu" id="menu" aria-expanded="false" aria-controls="side">Menu</button>
+        <button type="button" class="btn small menu" id="menu" aria-expanded="false" aria-controls="side"><span class="bars" aria-hidden="true"></span>Menu</button>
         <span class="top-title" id="top-title">Admin</span>
+        <span class="top-brand" lang="hi">अमानत</span>
       </header>
       <main id="view" tabindex="-1" aria-live="polite"></main>
     </div>
 
     <main class="login" id="login" hidden>
-      <form id="login-form" class="card" novalidate>
-        <p class="brand-hi" lang="hi">अमानत</p>
-        <h1>Store admin</h1>
-        <div class="field"><label for="l-email">Email</label><input id="l-email" name="email" type="email" autocomplete="username" required /></div>
-        <div class="field"><label for="l-password">Password</label><input id="l-password" name="password" type="password" autocomplete="current-password" required /></div>
-        <p class="hint" style="margin:-.4rem 0 .8rem"><a href="/forgot-password">Forgot password?</a></p>
+      <div class="login-art" aria-hidden="true">
+        <div class="login-art-inner">
+          <span class="brand-hi" lang="hi">अमानत</span>
+          <span class="brand-en">Amaanat</span>
+          <p>Some things are too precious to lose.</p>
+        </div>
+      </div>
+      <form id="login-form" class="login-card" novalidate>
+        <p class="eyebrow">Store admin</p>
+        <h1>Welcome back</h1>
+        <p class="sub">Sign in to manage orders, products and your website.</p>
+        <div class="field"><label for="l-email">Email</label><input id="l-email" name="email" type="email" autocomplete="username" required maxlength="254" /></div>
+        <div class="field"><label for="l-password">Password</label>
+          <div class="pw"><input id="l-password" name="password" type="password" autocomplete="current-password" required maxlength="72" /><button type="button" class="pw-toggle" aria-controls="l-password" aria-pressed="false">Show</button></div></div>
+        <p class="hint" style="margin:-.4rem 0 1rem;text-align:right"><a href="/forgot-password">Forgot password?</a></p>
         <p class="error" id="login-error" role="alert"></p>
-        <button class="btn primary" type="submit">Sign in</button>
-        <p class="hint">Admin access is granted by the store owner. There are no shared or demo accounts.</p>
+        <button class="btn primary block" type="submit">Sign in</button>
+        <p class="hint center">Admin access is granted by the store owner. There are no shared or demo accounts.</p>
       </form>
     </main>
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
     <script src="/admin/admin.js"></script>
+    <script src="/admin/cms.js"></script>
   </body>
 </html>

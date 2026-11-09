@@ -31,7 +31,7 @@ const server = http.createServer(app.handler).listen(0);
 await new Promise((r) => server.on("listening", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const catalogue = JSON.parse(await readFile(path.join(ROOT, "data/products.json"), "utf8")).products;
-const pages = ["/", "/shop", "/about", "/contact", "/track", "/cart", "/checkout", "/account", "/wishlist", "/order", "/faq", "/shipping", "/returns", "/privacy", "/terms",
+const pages = ["/", "/shop", "/about", "/meet-the-founder", "/contact", "/track", "/cart", "/checkout", "/account", "/wishlist", "/order", "/faq", "/shipping", "/returns", "/privacy", "/terms",
   ...[...new Set(catalogue.map((p) => p.category.toLowerCase()))].map((c) => `/collections/${c}`),
   ...catalogue.map((p) => `/products/${p.slug}`)];
 const titles = new Map();

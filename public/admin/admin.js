@@ -76,10 +76,13 @@
     e.preventDefault();
     const f = e.target;
     $('#login-error').textContent = '';
+    f.querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.value.trim())) { f.email.classList.add('invalid'); $('#login-error').textContent = 'Enter the email address you sign in with.'; f.email.focus(); return; }
+    if (!f.password.value) { f.password.classList.add('invalid'); $('#login-error').textContent = 'Enter your password.'; f.password.focus(); return; }
     try {
       const r = await withButton(f.querySelector('button'), () => fetch('/api/admin/login', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: f.email.value, password: f.password.value }),
+        body: JSON.stringify({ email: f.email.value.trim(), password: f.password.value }),
       }).then(async (res) => ({ ok: res.ok, body: await res.json().catch(() => ({})) })));
       if (!r.ok) { $('#login-error').textContent = r.body.message || 'Sign-in failed.'; return; }
       f.password.value = '';
@@ -92,10 +95,21 @@
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
     showLogin();
   });
-  $('#menu').addEventListener('click', () => {
-    const open = $('#side').classList.toggle('open');
+  const setMenu = (open) => {
+    $('#side').classList.toggle('open', open);
+    $('#scrim').hidden = !open;
     $('#menu').setAttribute('aria-expanded', String(open));
-  });
+  };
+  $('#menu').addEventListener('click', () => setMenu(!$('#side').classList.contains('open')));
+  $('#scrim').addEventListener('click', () => setMenu(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+  document.querySelectorAll('.pw-toggle').forEach((btn) => btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.getAttribute('aria-controls'));
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+    btn.setAttribute('aria-pressed', String(show));
+  }));
 
   async function start() {
     try {
@@ -125,8 +139,14 @@
     [/^#\/pages$/, pages, 'Pages'],
     [/^#\/audit$/, audit, 'Audit log'],
   ];
+  let lastHash = location.hash;
   function route() {
     if (!me) return;
+    if (window.AmaanatAdmin?.dirty && location.hash !== lastHash) {
+      if (!window.confirm('You have unsaved changes. Leave without saving?')) { history.replaceState(null, '', lastHash); return; }
+      window.AmaanatAdmin.dirty = false;
+    }
+    lastHash = location.hash;
     const hash = location.hash || '#/overview';
     const match = routes.find(([re]) => re.test(hash.split('?')[0]));
     if (!match) { location.hash = '#/overview'; return; }
@@ -135,13 +155,19 @@
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === section));
     $('#top-title').textContent = title;
     document.title = `${title} — Amaanat admin`;
-    $('#side').classList.remove('open');
+    setMenu(false);
     const args = re.exec(hash.split('?')[0]).slice(1);
     loading();
     Promise.resolve(fn(...args)).catch((err) => { if (err.status !== 401) failed(err, route); });
     view.focus({ preventScroll: true });
   }
   window.addEventListener('hashchange', route);
+  window.addEventListener('beforeunload', (e) => { if (window.AmaanatAdmin.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  // Extension point for the website editor (cms.js).
+  window.AmaanatAdmin = {
+    api, toast, esc, date, imgSrc, withButton, empty, view, isOwner: () => isOwner(), ownerNote, dirty: false,
+    addRoute(re, fn, title) { routes.splice(routes.length - 1, 0, [re, fn, title]); if (me) route(); },
+  };
   const query = () => new URLSearchParams((location.hash.split('?')[1]) || '');
 
   /* ── Overview ── */
@@ -153,7 +179,7 @@
     if (o.products.stockUnconfirmed) setup.push(`${o.products.stockUnconfirmed} active product(s) have unconfirmed stock and can't be bought. Count them in Inventory.`);
     if (!o.setup.storage) setup.push('Image storage is not configured — uploads are disabled.');
     view.innerHTML = `
-      <div class="head"><h1>Overview</h1></div>
+      <div class="head"><div><p class="eyebrow">${esc(new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }))}</p><h1>Overview</h1></div><div class="actions"><a class="btn" href="#/website">Edit website</a><a class="btn primary" href="#/orders">View orders</a></div></div>
       ${setup.length ? `<div class="banner"><b>Before customers can buy:</b><ul>${setup.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
       ${o.orders.needsReview ? `<div class="banner bad">${o.orders.needsReview} order(s) need review. <a href="#/orders?review=1">Open them</a></div>` : ''}
       <div class="grid kpis">
@@ -543,12 +569,10 @@
   /* ── Settings ── */
   async function settings() {
     const { settings: s } = await api('GET', '/api/admin/settings');
-    const h = s.homepage || {};
     const dis = isOwner() ? '' : 'disabled';
     const input = (name, label, value, attrs = '') => `<div class="field"><label for="s-${name}">${label}</label><input id="s-${name}" name="${name}" value="${esc(value ?? '')}" ${attrs} ${dis} /></div>`;
-    const area = (name, label, value) => `<div class="field"><label for="s-${name}">${label}</label><textarea id="s-${name}" name="${name}" maxlength="1000" ${dis}>${esc(value ?? '')}</textarea></div>`;
     view.innerHTML = `
-      <div class="head"><h1>Settings</h1></div>${ownerNote()}
+      <div class="head"><div><h1>Settings</h1><p class="sub">Checkout, contact details, social links and the announcement bar. Homepage and page content live under <a href="#/website">Website</a>.</p></div></div>${ownerNote()}
       <form id="sform" novalidate>
         <section class="card"><h2>Checkout</h2>
           <p class="hint">Checkout stays closed until shipping is confirmed. Enter 0 for free shipping. Only enable tax if it applies to your business.</p>
@@ -568,15 +592,9 @@
           <div class="row">${input('instagramUrl', 'Instagram', s.instagramUrl, 'type="url"')}${input('facebookUrl', 'Facebook', s.facebookUrl, 'type="url"')}</div>
           <div class="row">${input('youtubeUrl', 'YouTube', s.youtubeUrl, 'type="url"')}${input('pinterestUrl', 'Pinterest', s.pinterestUrl, 'type="url"')}</div>
         </section>
-        <section class="card"><h2>Announcement bar</h2>
+        <section class="card"><h2>Announcement bar</h2><p class="hint">The thin strip at the very top of every page. Changes apply as soon as you save.</p>
           <div class="row">${input('announcementText', 'Text', s.announcementText, 'maxlength="160"')}${input('announcementLink', 'Link (/page or https://)', s.announcementLink)}</div>
           <label class="check"><input type="checkbox" name="announcementEnabled" ${s.announcementEnabled ? 'checked' : ''} ${dis}/> Show the announcement bar</label>
-        </section>
-        <section class="card"><h2>Homepage</h2><p class="hint">Leave blank to use the current brand copy.</p>
-          <div class="row">${input('heroEyebrow', 'Hero small heading', h.heroEyebrow)}${input('heroTitle', 'Hero title', h.heroTitle)}</div>
-          ${input('heroSubtitle', 'Hero tagline', h.heroSubtitle)}${area('heroText', 'Hero text', h.heroText)}
-          ${input('heroImage', 'Hero image (path like /assets/post.jpg or https:// link)', h.heroImage)}
-          ${input('storyTitle', 'Story heading', h.storyTitle)}${area('storyText', 'Story text', h.storyText)}
         </section>
         ${isOwner() ? '<div class="actions"><button class="btn primary" type="submit">Save settings</button></div>' : ''}
       </form>
@@ -602,7 +620,6 @@
         businessAddress: f.businessAddress.value, instagramUrl: f.instagramUrl.value, facebookUrl: f.facebookUrl.value, youtubeUrl: f.youtubeUrl.value,
         pinterestUrl: f.pinterestUrl.value, announcementText: f.announcementText.value, announcementLink: f.announcementLink.value,
         announcementEnabled: f.announcementEnabled.checked,
-        homepage: { heroEyebrow: f.heroEyebrow.value, heroTitle: f.heroTitle.value, heroSubtitle: f.heroSubtitle.value, heroText: f.heroText.value, heroImage: f.heroImage.value, storyTitle: f.storyTitle.value, storyText: f.storyText.value },
       };
       try { await withButton(f.querySelector('[type=submit]'), () => api('PUT', '/api/admin/settings', body)); toast('Settings saved', 'ok'); settings(); } catch (err) { formErrors(f, err); }
     });
@@ -617,11 +634,13 @@
   /* ── Pages ── */
   const PAGE_NAMES = { about: 'About (extra text)', faq: 'FAQ', privacy: 'Privacy policy', terms: 'Terms', shipping: 'Shipping policy', returns: 'Returns & refunds' };
   async function pages() {
-    const { pages: list } = await api('GET', '/api/admin/pages');
+    const { pages: all } = await api('GET', '/api/admin/pages');
+    // The About page is built in Website → About; its old extra text stays editable only if it has some.
+    const list = all.filter((p) => p.slug !== 'about' || p.body);
     const slug = query().get('edit');
     const cur = list.find((p) => p.slug === slug);
     view.innerHTML = `
-      <div class="head"><h1>Pages</h1></div>${ownerNote()}
+      <div class="head"><div><h1>Policies</h1><p class="sub">Shipping, returns, privacy, terms and FAQ.</p></div></div>${ownerNote()}
       <p class="hint">Write only confirmed business policies. Unpublished pages show customers a “being prepared” message.</p>
       <div class="table-wrap"><table class="stack"><thead><tr><th>Page</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>
         ${list.map((p) => `<tr><td data-label="Page">${esc(PAGE_NAMES[p.slug])}</td><td data-label="Status">${p.published ? '<span class="badge ok">published</span>' : p.body ? '<span class="badge warn">draft</span>' : '<span class="badge">empty</span>'}</td>
@@ -649,7 +668,7 @@
     const ent = q.get('entity') || '';
     view.innerHTML = `
       <div class="head"><h1>Audit log</h1>
-        <select id="aent" aria-label="Filter">${['', 'order', 'product', 'settings', 'page', 'customer', 'admin'].map((v) => `<option value="${v}" ${v === ent ? 'selected' : ''}>${v || 'Everything'}</option>`).join('')}</select></div>
+        <select id="aent" aria-label="Filter">${['', 'order', 'product', 'settings', 'page', 'cms', 'customer', 'admin'].map((v) => `<option value="${v}" ${v === ent ? 'selected' : ''}>${v || 'Everything'}</option>`).join('')}</select></div>
       <p class="hint">Append-only record of sensitive admin actions.</p>
       ${r.entries.length ? `<div class="table-wrap"><table class="stack"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>On</th><th>Details</th></tr></thead><tbody>
         ${r.entries.map((a) => `<tr><td data-label="When">${date(a.at)}</td><td data-label="Who">${esc(a.actor || '—')}<br><small>${esc(a.role || '')} ${esc(a.ip || '')}</small></td>

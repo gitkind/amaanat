@@ -268,8 +268,10 @@ function initQuickAdd() {
 }
 
 function initNewsletter() {
-  const form = document.getElementById('newsletter');
-  if (!form) return;
+  document.querySelectorAll('form.newsletter-form').forEach(bindNewsletter);
+}
+
+function bindNewsletter(form) {
   const msg = form.querySelector('.newsletter-msg');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
