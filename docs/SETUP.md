@@ -41,6 +41,7 @@ There are no demo or shared admin accounts.
 | `004_newsletter.sql` | Newsletter sign-ups. |
 | `005_service_role_grants.sql` | Table access for the server's `service_role` (needed on projects without default grants). |
 | `006_cod.sql` | Cash on Delivery: `orders.payment_method`, the `cod_enabled` switch (off by default) and COD-aware checkout, fulfilment and admin functions. |
+| `007_cms.sql` | Website editor: drafts, publishing and version history for the homepage, About, Meet the Founder and menu/footer. Until it is applied the store shows the original design and the editor asks for it. |
 
 All of them only add things and can be re-run safely. None of them changes prices, stock, settings values or existing orders.
 
@@ -70,6 +71,16 @@ on conflict (user_id) do update set role = 'owner';
 
 Uploads go through the server only. The server checks each file's real type (JPEG, PNG or WebP only, max 4 MB).
 
+## 4a. Website editor (Admin → Website editor)
+
+- **Homepage** and **About**: add, remove, hide, duplicate and reorder sections (drag the ⋮⋮ handle, or use ↑ ↓). Templates: hero banner, image with text, featured products, product categories, promotional banner, brand story, testimonials, newsletter, custom text and highlights. Each has predefined layouts.
+- **Meet the Founder** (`/meet-the-founder`): name, designation, photo, biography, story, inspiration, mission, vision and an optional message. The page says "coming soon" (and isn't linked or indexed) until it's switched on and has a name. Fill in only real details.
+- **Menu & footer**: footer tagline, newsletter text, extra menu/footer links, small print.
+- **Policies** and **Settings** (announcement bar, contact details, social links) are edited as before.
+- **Save draft** stores changes without showing them; **Preview** opens the page with the draft (visible to signed-in admins only); **Publish** makes it live (cached pages refresh within about a minute); **More → Version history** restores any earlier published version into the draft.
+- Only the **owner** can change website content; managers can view it. Every save, publish and restore is in the audit log.
+- Images: JPEG/PNG/WebP up to 4 MB, checked by the server and stored in the `product-images` bucket under `site/`. Replaced images stay in storage because older versions may still use them.
+
 ## 4b. Password reset emails (Supabase Auth → dashboard)
 
 The site sends reset requests to Supabase (`/forgot-password` → Supabase emails a link → `/reset-password`).
@@ -85,6 +96,7 @@ The site sends reset requests to Supabase (`/forgot-password` → Supabase email
    team members' addresses and is heavily rate-limited. For customers, set up custom SMTP
    (e.g. Resend, Postmark, Amazon SES, Zoho) before launch.
 4. **Authentication → Rate Limits**: check "emails sent per hour" suits you.
+5. **Authentication → Sign In / Providers → Email → "Confirm email"**: keep it **on**. Registration never says whether an email is already registered; with confirmation on, new and existing emails get exactly the same response.
 
 ## 5. Razorpay (TEST mode)
 
@@ -96,15 +108,19 @@ The site sends reset requests to Supabase (`/forgot-password` → Supabase email
    Copy the webhook secret into `RAZORPAY_WEBHOOK_SECRET`.
 3. Payment capture should be **automatic** (the default). Orders are marked paid only once Razorpay reports the payment as captured.
 
-## 6. Deploy to Vercel (only when you approve it)
+## 6. Deploy to Vercel
 
 1. Import the GitHub repository in Vercel. The framework preset is "Other". `vercel.json` already sets:
    - the build command (`npm run build`)
    - the output directory (`public/`)
    - routing: every page goes to the server function, static files are served directly
    - security headers
-   - a reconcile cron every 15 minutes
-2. Add the environment variables from §2 to the **Production** and **Preview** environments. Use **test** keys for both.
+   - a daily reconcile cron (03:00 IST; Hobby plans allow daily crons only — checkout also releases expired reservations itself. On Pro you can change it to `*/15 * * * *`)
+2. Add the environment variables from §2 to the **Production** and **Preview** environments:
+   - required: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`, `CRON_SECRET` (any long random string), `TRUST_PROXY=true`
+   - `APP_BASE_URL` = the production address (Production only; leave unset on Preview so previews are never indexed)
+   - Razorpay: leave `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` **unset** until KYC is approved — checkout then offers Cash on Delivery only. Never set `RAZORPAY_ALLOW_LIVE=true` before live keys are approved and tested.
+   - Do not set `DATABASE_DRIVER=pglite` or `STORAGE_DRIVER=local` (refused in production).
 3. Deploy a **Preview** first and run through §7.
 4. After the custom domain works, set `APP_BASE_URL` to it and redeploy.
 5. Submit `https://<domain>/sitemap.xml` in Google Search Console.

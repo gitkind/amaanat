@@ -21,44 +21,102 @@
     try { return await fn(); } finally { btn.disabled = false; btn.textContent = label; }
   }
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const pwField = (name, label, autocomplete, extra = '') => {
+    const id = `f-${name}-${++uid}`;
+    return `<div class="form-group"><label for="${id}">${label}</label><div class="pw-wrap"><input id="${id}" name="${name}" type="password" autocomplete="${autocomplete}" required maxlength="72" ${extra}>
+      <button type="button" class="pw-toggle" aria-controls="${id}" aria-pressed="false">Show</button></div></div>`;
+  };
+  function bindToggles(scope) {
+    scope.querySelectorAll('.pw-toggle').forEach((btn) => btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.getAttribute('aria-controls'));
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? 'Hide' : 'Show';
+      btn.setAttribute('aria-pressed', String(show));
+    }));
+  }
+  // Shows one message under each invalid field; returns true when the form is valid.
+  function validate(form, rules) {
+    form.querySelectorAll('.field-error').forEach((el) => el.remove());
+    form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
+    let first = null;
+    for (const [name, check] of rules) {
+      const input = form.elements[name];
+      const msg = check(input.value);
+      if (!msg) continue;
+      input.setAttribute('aria-invalid', 'true');
+      const p = document.createElement('p');
+      p.className = 'field-error';
+      p.id = `${input.id}-err`;
+      p.textContent = msg;
+      input.setAttribute('aria-describedby', p.id);
+      (input.closest('.pw-wrap') || input).after(p);
+      first ||= input;
+    }
+    first?.focus();
+    return !first;
+  }
+  const emailRule = (v) => (!v.trim() ? 'Enter your email address.' : EMAIL_RE.test(v.trim()) ? '' : 'Enter a valid email address, like name@example.com.');
+
   function renderSignedOut() {
     title.textContent = 'Sign in';
     sub.textContent = 'Save addresses, keep a wishlist and see your orders.';
     root.innerHTML = `
-      <div class="account-grid">
+      <div class="account-grid auth-grid">
         <form class="panel" id="login-form" novalidate>
+          <p class="eyebrow">Welcome back</p>
           <h2>Sign in</h2>
-          ${field('email', 'Email', '', 'type="email" autocomplete="email" required')}
-          ${field('password', 'Password', '', 'type="password" autocomplete="current-password" required')}
-          <p style="margin:-.5rem 0 1rem"><a class="text-link" href="/forgot-password">Forgot password?</a></p>
+          ${field('email', 'Email', '', 'type="email" autocomplete="email" required maxlength="254"')}
+          ${pwField('password', 'Password', 'current-password')}
+          <p style="margin:-.5rem 0 1rem;text-align:right"><a class="text-link" href="/forgot-password">Forgot password?</a></p>
           <p class="form-error" data-msg role="alert"></p>
           <button class="btn btn--block" type="submit">Sign in</button>
         </form>
         <form class="panel" id="register-form" novalidate>
+          <p class="eyebrow">New to Amaanat</p>
           <h2>Create an account</h2>
           ${field('fullName', 'Full name', '', 'autocomplete="name" maxlength="120"')}
-          ${field('email', 'Email', '', 'type="email" autocomplete="email" required')}
-          ${field('password', 'Password (8 or more characters)', '', 'type="password" autocomplete="new-password" minlength="8" maxlength="72" required')}
+          ${field('email', 'Email', '', 'type="email" autocomplete="email" required maxlength="254"')}
+          ${pwField('password', 'Password', 'new-password', 'minlength="8"')}
+          <p class="fine-print" style="margin:-.6rem 0 1rem">8 to 72 characters. A short phrase is easy to remember and hard to guess.</p>
+          ${pwField('confirm', 'Confirm password', 'new-password', 'minlength="8"')}
+          <p class="form-error" data-msg role="alert"></p>
+          <div data-ok></div>
           <button class="btn btn--ghost btn--block" type="submit">Create account</button>
           <p class="fine-print">Checking out as a guest is always possible.</p>
         </form>
       </div>`;
+    bindToggles(root);
     const after = () => { location.href = safeNext || '/account'; };
     root.querySelector('#login-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
       f.querySelector('[data-msg]').textContent = '';
-      submitting(f, () => API.post('/api/auth/login', { email: f.email.value, password: f.password.value }).then(after))
-        .catch((err) => { f.querySelector('[data-msg]').textContent = err.message; });
+      if (!validate(f, [['email', emailRule], ['password', (v) => (v ? '' : 'Enter your password.')]])) return;
+      submitting(f, () => API.post('/api/auth/login', { email: f.email.value.trim(), password: f.password.value }).then(() => {
+        f.querySelector('[type="submit"]').textContent = 'Signed in ✓';
+        after();
+      })).catch((err) => { f.querySelector('[data-msg]').textContent = err.message; });
     });
     root.querySelector('#register-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
+      f.querySelector('[data-msg]').textContent = '';
+      const ok = validate(f, [
+        ['fullName', (v) => (v.trim() && v.trim().length < 2 ? 'Enter your full name, or leave it empty.' : '')],
+        ['email', emailRule],
+        ['password', (v) => (v.length < 8 ? 'Use at least 8 characters.' : v.length > 72 ? 'Use 72 characters or fewer.' : '')],
+        ['confirm', (v) => (v !== f.password.value ? 'The passwords do not match.' : '')],
+      ]);
+      if (!ok) return;
       submitting(f, async () => {
-        const r = await API.post('/api/auth/register', { fullName: f.fullName.value, email: f.email.value, password: f.password.value });
-        if (r.needsConfirmation) notice(f, r.message, 'ok');
-        else after();
-      }).catch((err) => Toast.error(err.message));
+        const r = await API.post('/api/auth/register', { fullName: f.fullName.value.trim(), email: f.email.value.trim(), password: f.password.value });
+        if (r.needsConfirmation) {
+          f.reset();
+          notice(f.querySelector('[data-ok]'), r.message, 'ok');
+        } else after();
+      }).catch((err) => { f.querySelector('[data-msg]').textContent = err.message; });
     });
   }
 

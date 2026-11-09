@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
-import { CUSTOMER, TEST_CRON_SECRET, newKey, sign, signWebhook, startTestServer } from "./helpers.js";
+import { CUSTOMER, TEST_CRON_SECRET, createClient, newKey, sign, signWebhook, startTestServer } from "./helpers.js";
 
 let t;
 before(async () => {
@@ -393,7 +393,12 @@ describe("accounts", () => {
     assert.match(cookie, /SameSite=Lax/);
     assert.equal((await c.get("/api/auth/me")).body.user.email, "asha@example.test");
     assert.equal((await c.get("/api/cart")).body.count, 1, "guest bag merged");
-    assert.equal((await c.post("/api/auth/register", { email: "asha@example.test", password: "another password" })).status, 409);
+    // Registering an existing email doesn't reveal that it exists and never signs anyone in.
+    const dup = await createClient(t.base).post("/api/auth/register", { email: "asha@example.test", password: "another password" });
+    assert.equal(dup.status, 201);
+    assert.equal(dup.body.user, null);
+    assert.equal(dup.body.needsConfirmation, true);
+    assert.ok(!dup.headers.getSetCookie().some((x) => x.startsWith("am_at=")), "no session for a duplicate sign-up");
 
     assert.equal((await c.put("/api/account/profile", { fullName: "Asha T", phone: "98765 43210" })).body.profile.phone, "9876543210");
     const addr = await c.post("/api/account/addresses", { fullName: "Asha T", phone: "9876543210", line: "1 Lane", locality: "Area", city: "Pune", state: "Maharashtra", pin: "411001" });
